@@ -1,0 +1,8 @@
+{
+  "name": "deck-of-fools-tools",
+  "private": true,
+  "description": "Dev tools for Deck of Fools: headless screenshots of the web build.",
+  "devDependencies": {
+    "puppeteer-core": "25.12.0"
+  }
+}

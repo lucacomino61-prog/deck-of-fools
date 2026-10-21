@@ -1,0 +1,755 @@
+keys,en
+hand.high_card,High Card
+hand.pair,Pair
+hand.two_pair,Two Pair
+hand.three_kind,Three of a Kind
+hand.straight,Straight
+hand.flush,Flush
+hand.full_house,Full House
+hand.four_kind,Four of a Kind
+hand.straight_flush,Straight Flush
+hand.five_kind,Five of a Kind
+hand.flush_house,Flush House
+hand.flush_five,Flush Five
+s_aries.name,Aries
+s_aries.text,"Level up High Card: +10 Points, +1 Mult"
+s_gemini.name,Gemini
+s_gemini.text,"Level up Pair: +15 Points, +1 Mult"
+s_pisces.name,Pisces
+s_pisces.text,"Level up Two Pair: +20 Points, +1 Mult"
+s_taurus.name,Taurus
+s_taurus.text,"Level up Three of a Kind: +20 Points, +2 Mult"
+s_sagittarius.name,Sagittarius
+s_sagittarius.text,"Level up Straight: +30 Points, +3 Mult"
+s_aquarius.name,Aquarius
+s_aquarius.text,"Level up Flush: +15 Points, +2 Mult"
+s_cancer.name,Cancer
+s_cancer.text,"Level up Full House: +25 Points, +2 Mult"
+s_leo.name,Leo
+s_leo.text,"Level up Four of a Kind: +30 Points, +3 Mult"
+s_scorpio.name,Scorpio
+s_scorpio.text,"Level up Straight Flush: +40 Points, +4 Mult"
+s_virgo.name,Virgo
+s_virgo.text,"Level up Five of a Kind: +35 Points, +3 Mult"
+s_capricorn.name,Capricorn
+s_capricorn.text,"Level up Flush House: +40 Points, +4 Mult"
+s_libra.name,Libra
+s_libra.text,"Level up Flush Five: +50 Points, +3 Mult"
+z_zanni.name,Zanni
+z_zanni.text,+4 Mult
+z_arlecchino.name,Arlecchino
+z_arlecchino.text,+2 Mult for each Jester to his left
+z_capitano.name,Il Capitano
+z_capitano.text,+12 Mult on the first hand of each show
+z_pedrolino.name,Pedrolino
+z_pedrolino.text,+3 Mult for each hand already played this show
+z_scapino.name,Scapino
+z_scapino.text,+4 Mult for each discard used this show
+z_isabella.name,Isabella
+z_isabella.text,"If the hand contains a Pair: +15 Points, +5 Mult"
+z_flavio.name,Flavio
+z_flavio.text,"If the hand contains Two Pair: +20 Points, +6 Mult"
+z_gianduja.name,Gianduja
+z_gianduja.text,"If the hand contains Three of a Kind: +40 Points, +6 Mult"
+z_coviello.name,Coviello
+z_coviello.text,"If the hand contains a Straight: +60 Points, +4 Mult"
+z_stenterello.name,Stenterello
+z_stenterello.text,"If the hand contains a Flush: +40 Points, +5 Mult"
+z_dottore.name,Il Dottore
+z_dottore.text,+45 Points if exactly 5 cards are played
+z_tartaglia.name,Tartaglia
+z_tartaglia.text,"Each scored 2, 3 or 4: +3 Mult"
+z_colombina.name,Colombina
+z_colombina.text,"Each scored Queen: +15 Points, +3 Mult"
+z_pulcinella.name,Pulcinella
+z_pulcinella.text,Each scored card of the same suit as the first scored card: +2 Mult
+z_sandrone.name,Sandrone
+z_sandrone.text,"Each scored 8, 9 or 10: +12 Points"
+z_meneghino.name,Meneghino
+z_meneghino.text,+35 Points if no face cards scored
+z_brighella.name,Brighella
+z_brighella.text,At cash-out: +1 ducat for each discard you didn't use
+z_pantalone.name,Pantalone
+z_pantalone.text,Gains +1 Mult permanently every time you buy something in the shop
+z_truffaldino.name,Truffaldino
+z_truffaldino.text,+4 ducats whenever you skip a show
+z_mezzetino.name,Mezzetino
+z_mezzetino.text,Each scored 7: +1 ducat
+z_capocomico.name,Il Capocomico
+z_capocomico.text,x1.5 Mult if every Jester slot is full
+z_maschera_nera.name,La Maschera Nera
+z_maschera_nera.text,"x2.5 Mult, but you have 1 fewer hand each show"
+z_funambolo.name,Il Funambolo
+z_funambolo.text,x2 Mult on the last hand of a show
+z_lazzo.name,Il Lazzo
+z_lazzo.text,x2 Mult if exactly 3 cards are played
+z_fracasso.name,Fracasso
+z_fracasso.text,x1.5 Mult if you haven't discarded this show
+z_rugantino.name,Rugantino
+z_rugantino.text,Gains x0.15 Mult for each hand in a row containing a Pair; resets to x1 on a hand without one
+z_mangiafuoco.name,Il Mangiafuoco
+z_mangiafuoco.text,Gains x0.25 Mult each time a playing card is destroyed (starts at x1)
+z_suggeritore.name,Il Suggeritore
+z_suggeritore.text,The last scored card scores one extra time
+z_trombettiere.name,Il Trombettiere
+z_trombettiere.text,Each scored Ace scores one extra time
+z_saltimbanco.name,Il Saltimbanco
+z_saltimbanco.text,+1 card in hand
+z_carro_tespi.name,Il Carro di Tespi
+z_carro_tespi.text,+1 consumable slot
+z_notaio.name,Il Notaio
+z_notaio.text,Interest cap +5 (earn up to 10 interest per show)
+z_sipario.name,Il Sipario
+z_sipario.text,Each unused hand pays 1 extra ducat at cash-out
+z_gobbo.name,Il Gobbo
+z_gobbo.text,Each scored Charmed card: +2 ducats
+z_ciarlatano.name,Il Ciarlatano
+z_ciarlatano.text,"Doubles every ""N in M"" chance"
+z_smeraldina.name,Smeraldina
+z_smeraldina.text,Each scored enhanced card: +6 Mult
+z_corallina.name,Corallina
+z_corallina.text,Each Iron card held in hand: an extra x1.25 Mult
+z_vetraio.name,Il Vetraio
+z_vetraio.text,Mirror cards never shatter
+z_cantastorie.name,Il Cantastorie
+z_cantastorie.text,+1 Mult for each Tarocchi or Sign used this run
+z_bauta.name,La Bauta
+z_bauta.text,Each face card held in hand: +4 Mult
+z_claque.name,La Claque
+z_claque.text,+1 Mult for every 3 ducats you hold (max +15)
+z_loggione.name,Il Loggione
+z_loggione.text,x1.5 Mult if this is your most played hand (counting this one)
+z_prima.name,La Prima
+z_prima.text,"On the first hand of each show, every scored card scores one extra time"
+z_copione.name,Il Copione
+z_copione.text,+10 Mult if you play the same poker hand as your previous hand
+z_canovaccio.name,Il Canovaccio
+z_canovaccio.text,+3 Mult for each different suit among scored cards
+z_teatrino.name,Il Teatrino
+z_teatrino.text,+1 card slot in the shop
+z_impresario.name,L'Impresario
+z_impresario.text,At cash-out: +1 ducat for each Jester you own
+z_scaramuccia.name,Scaramuccia
+z_scaramuccia.text,Each scored Jack: x1.2 Mult
+z_beltrame.name,Beltrame
+z_beltrame.text,Each Spade held in hand: +3 Mult
+z_lucinda.name,Lucinda
+z_lucinda.text,"Each scored Heart: +20 Points, +3 Mult"
+z_mercante.name,Il Mercante
+z_mercante.text,Each scored Diamond: 1 in 3 chance of +3 ducats
+z_moretta.name,La Moretta
+z_moretta.text,x3 Mult if exactly 1 card is played
+z_pappagallo.name,Il Pappagallo
+z_pappagallo.text,"If the hand is exactly a Pair, both paired cards score one extra time"
+z_cerusico.name,Il Cerusico
+z_cerusico.text,Discarded face cards are destroyed; +2 ducats each
+z_lelio.name,Lelio
+z_lelio.text,Each scored Mirror card: an extra x1.5 Mult
+z_ottavio.name,Ottavio
+z_ottavio.text,+2 Mult for each enhanced card in your full deck
+z_volto.name,Il Volto
+z_volto.text,"Each scored card with no enhancement, edition or seal: +3 Mult"
+z_giangurgolo.name,Giangurgolo
+z_giangurgolo.text,Gains +2 Mult permanently every time you sell a card
+z_pasquariello.name,Pasquariello
+z_pasquariello.text,Gains +4 Mult permanently every time you skip a show
+z_chiromante.name,La Chiromante
+z_chiromante.text,"When you use a Tarocchi: 1 in 3 chance to create a random Sign (if there's room)"
+z_burattinaio.name,Il Burattinaio
+z_burattinaio.text,Copies the effect of the Jester to his right
+z_mattacino.name,Il Mattacino
+z_mattacino.text,Copies the effect of your leftmost Jester
+z_re_dei_folli.name,Il Re dei Folli
+z_re_dei_folli.text,Every other Jester you own gives x1.2 Mult
+z_compagnia.name,La Compagnia
+z_compagnia.text,+2 Jester slots (one more than it uses)
+z_capriccio.name,Il Capriccio
+z_capriccio.text,Each show names a random poker hand; playing it gives x3 Mult
+z_maschera_oro.name,La Maschera d'Oro
+z_maschera_oro.text,"x1 Mult, plus x0.1 for every 5 ducats you hold"
+z_orologio.name,L'Orologio
+z_orologio.text,Gains x0.25 Mult each time you beat a Patron
+z_notturno.name,Il Notturno
+z_notturno.text,x2 Mult during Patron shows
+z_gemelli.name,I Gemelli
+z_gemelli.text,x3 Mult if the played cards include two of the same rank and suit
+z_gioco_parti.name,Il Gioco delle Parti
+z_gioco_parti.text,"When it triggers, Points and Mult swap places"
+z_pittore.name,Il Pittore
+z_pittore.text,Flushes and Straights need only 4 cards
+z_gran_ballo.name,Il Gran Ballo
+z_gran_ballo.text,"In a hand containing a Straight or Flush, every scored card scores one extra time"
+z_teatro_olimpico.name,Il Teatro Olimpico
+z_teatro_olimpico.text,+1 hand and +1 discard each show
+z_nebbia.name,La Nebbia
+z_nebbia.text,"Patrons lose their whim, but their target is x2.5 instead of x2"
+z_fenice.name,La Fenice
+z_fenice.text,"If you'd lose a show after scoring at least a quarter of the target, you pass it instead (no show reward). La Fenice then burns"
+z_banditore.name,Il Banditore
+z_banditore.text,Signs level their hand twice
+z_maestro_cappella.name,Il Maestro di Cappella
+z_maestro_cappella.text,+3 Mult for each level of the played hand
+z_carnevale.name,Il Carnevale
+z_carnevale.text,Each scored face card without an enhancement becomes Masked after scoring
+z_prestigiatore.name,Il Prestigiatore
+z_prestigiatore.text,"When a show starts, a random card in your deck without an edition gains Silvered, Opaline or Prismatic"
+z_doge.name,Il Doge
+z_doge.text,Interest pays double
+z_martinelli.name,Tristano Martinelli
+z_martinelli.text,Each Jester to his left gives x1.5 Mult
+z_andreini.name,Isabella Andreini
+z_andreini.text,Each scored Queen: x2.5 Mult
+z_goldoni.name,Carlo Goldoni
+z_goldoni.text,Every scored card scores one extra time
+z_gozzi.name,Carlo Gozzi
+z_gozzi.text,Gains x0.5 Mult every time you use a Sign
+z_scala.name,Flaminio Scala
+z_scala.text,"When you win a show, your most played hand gains a level"
+z_lampionaio.name,Il Lampionaio
+z_lampionaio.text,+20 Points
+z_pagliaccio.name,Il Pagliaccio
+z_pagliaccio.text,+3 Mult for each card played
+z_fritellino.name,Fritellino
+z_fritellino.text,Each scored Club: +4 Mult
+z_trivellino.name,Trivellino
+z_trivellino.text,Each scored Diamond: +25 Points
+z_silvia.name,Silvia
+z_silvia.text,Each Heart held in hand: +2 Mult
+z_graziano.name,Graziano
+z_graziano.text,"Each scored Spade: +12 Points, +1 Mult"
+z_cassandro.name,Cassandro
+z_cassandro.text,+2 Mult for each card held in hand
+z_rosaura.name,Rosaura
+z_rosaura.text,"If the hand contains a Full House: +50 Points, +8 Mult"
+z_florindo.name,Florindo
+z_florindo.text,"If the hand contains Four of a Kind: +60 Points, +10 Mult"
+z_mirandolina.name,Mirandolina
+z_mirandolina.text,At cash-out: +3 ducats
+z_bigliettaio.name,Il Bigliettaio
+z_bigliettaio.text,Gains +2 sell value at each cash-out
+z_peppe_nappa.name,Peppe Nappa
+z_peppe_nappa.text,+10 Mult on the last hand of a show
+z_macchinista.name,Il Macchinista
+z_macchinista.text,+1 discard each show
+z_trovarobe.name,Il Trovarobe
+z_trovarobe.text,"When a show starts: +1 ducat for each Tarocchi or Sign you hold"
+z_comparsa.name,La Comparsa
+z_comparsa.text,+4 Mult for each empty Jester slot
+z_mimo.name,Il Mimo
+z_mimo.text,+50 Points if the hand is a High Card
+z_tamburino.name,Il Tamburino
+z_tamburino.text,+1 Mult for every 5 cards left in your draw pile
+z_ballerina.name,La Ballerina
+z_ballerina.text,+8 Mult if every scored card is the same colour (all red or all black)
+z_burattino.name,Burattino
+z_burattino.text,+10 Points for each Jester you own
+z_menestrello.name,Il Menestrello
+z_menestrello.text,+2 ducats whenever you use a Sign
+z_tabarrino.name,Tabarrino
+z_tabarrino.text,Gains +1 Mult permanently for each Club scored
+z_innamorati.name,Gli Innamorati
+z_innamorati.text,+10 Mult if exactly 2 cards are played
+z_rigattiere.name,Il Rigattiere
+z_rigattiere.text,The first reroll in each shop is free
+z_spazzino.name,Lo Spazzino
+z_spazzino.text,Discarding 5 cards at once: +3 ducats
+z_principe.name,Il Principe
+z_principe.text,"Each scored King: +15 Points, +2 Mult"
+z_garzone.name,Il Garzone
+z_garzone.text,Each scored number card (2-10): +2 Mult
+z_lavandaia.name,La Lavandaia
+z_lavandaia.text,+4 Mult for each discard you have left
+z_postino.name,Il Postino
+z_postino.text,+15 Points for each hand you have left (counting this one)
+z_cuoco.name,Il Cuoco
+z_cuoco.text,+3 Mult for each Tarocchi or Sign you hold
+z_calzolaio.name,Il Calzolaio
+z_calzolaio.text,Each scored card with a seal: +5 Mult
+z_fioraia.name,La Fioraia
+z_fioraia.text,Win a show with your first hand: +4 ducats at cash-out
+z_almanacchi.name,Il Venditore di Almanacchi
+z_almanacchi.text,+1 Mult for each different poker hand you've played this run
+z_sbandieratore.name,Lo Sbandieratore
+z_sbandieratore.text,+20 Points for each Jester to his right
+z_sarta.name,La Sarta
+z_sarta.text,"When a show starts, a random card in your deck without an enhancement becomes Lacquered"
+z_specchiaio.name,Lo Specchiaio
+z_specchiaio.text,+4 ducats whenever a Mirror card is destroyed
+z_gigante.name,Il Gigante
+z_gigante.text,"+2 cards in hand, but 1 fewer hand each show"
+z_mecenate.name,Il Mecenate
+z_mecenate.text,Cards and packs in the shop cost 1 ducat less (minimum 1)
+z_straniero.name,Lo Straniero
+z_straniero.text,x2 Mult the first time you play each poker hand this run
+z_eco.name,L'Eco
+z_eco.text,Cards held in hand trigger their held effects one extra time
+z_sagrestano.name,Il Sagrestano
+z_sagrestano.text,Each scored card with a seal scores one extra time
+z_usuraio.name,L'Usuraio
+z_usuraio.text,You can spend up to 20 ducats you don't have
+z_fattucchiere.name,Il Fattucchiere
+z_fattucchiere.text,"When you skip a show, also create a random Tarocchi (if there's room)"
+z_becchino.name,Il Becchino
+z_becchino.text,Gains x0.2 Mult permanently each time you sell a Jester
+z_orafo.name,L'Orafo
+z_orafo.text,Each scored Gilt card: +3 ducats
+z_rattoppatore.name,Il Rattoppatore
+z_rattoppatore.text,Each scored Motley card: +8 Mult
+z_gonfaloniere.name,Il Gonfaloniere
+z_gonfaloniere.text,+6 ducats at cash-out after a Patron show
+z_scultore.name,Lo Scultore
+z_scultore.text,+25 Points for each Marble card in your full deck
+z_mendicante.name,Il Mendicante
+z_mendicante.text,+15 Mult while you have 0 ducats or less
+z_merciaio.name,Il Merciaio
+z_merciaio.text,Gains +1 Mult every time you reroll the shop
+z_pescivendolo.name,Il Pescivendolo
+z_pescivendolo.text,"Each scored 5, 6 or 7: +3 Mult"
+z_smemorato.name,Lo Smemorato
+z_smemorato.text,"Each scored 2, 3, 4 or 5 scores one extra time"
+z_commedia.name,La Commedia
+z_commedia.text,Each scored face card scores one extra time
+z_ritrattista.name,Il Ritrattista
+z_ritrattista.text,Every card counts as a face card
+z_fabbro.name,Il Fabbro
+z_fabbro.text,"x1 Mult, plus x0.2 for each Iron card in your full deck"
+z_gioielliere.name,Il Gioielliere
+z_gioielliere.text,Each scored card with an edition: x1.25 Mult
+z_asceta.name,L'Asceta
+z_asceta.text,"x1 Mult, plus x0.05 for each card your deck is below 52"
+z_tipografo.name,Il Tipografo
+z_tipografo.text,"When a show starts, add a copy of a random card in your deck to your deck"
+z_astronomo.name,L'Astronomo
+z_astronomo.text,+2 Mult for each level above 1 across all your hands
+z_copista.name,Il Copista
+z_copista.text,The first Tarocchi you use each show is copied (if there's room)
+z_buttafuori.name,Il Buttafuori
+z_buttafuori.text,Sell him during a Patron show: the Patron loses its whim for that show
+z_ruffiana.name,La Ruffiana
+z_ruffiana.text,"After scoring a hand that contains a Pair, the paired cards take the first card's suit"
+z_avvocato.name,L'Avvocato
+z_avvocato.text,"Once per show, discarding exactly 1 card doesn't use a discard"
+z_nonna.name,La Nonna
+z_nonna.text,Gains +2 Mult at each cash-out
+z_cometa.name,La Cometa
+z_cometa.text,Each Sign you use also levels up your second most played hand
+z_prima_donna.name,La Prima Donna
+z_prima_donna.text,"x2 Mult, or x4 if she's your only Jester"
+o_maschera_divina.name,La Maschera Divina
+o_maschera_divina.text,Create a legendary Jester (needs a free slot)
+o_eclissi.name,L'Eclissi
+o_eclissi.text,Every poker hand gains a level
+o_janara.name,La Janara
+o_janara.text,Destroy 1 random card in your hand; add 3 random enhanced face cards to your hand
+o_fantasma.name,Il Fantasma
+o_fantasma.text,Destroy 1 random card in your hand; add 2 random enhanced Aces
+o_folletto.name,Il Folletto
+o_folletto.text,Destroy 1 random card in your hand; add 4 random enhanced number cards
+o_corno.name,Il Corno
+o_corno.text,Add a Ducal seal to 1 selected card
+o_ritorno.name,Il Ritorno
+o_ritorno.text,Add an Encore seal to 1 selected card
+o_civetta.name,La Civetta
+o_civetta.text,Add an Astral seal to 1 selected card
+o_sibilla.name,La Sibilla
+o_sibilla.text,Add an Oracle seal to 1 selected card
+o_fuoco_fatuo.name,Il Fuoco Fatuo
+o_fuoco_fatuo.text,"Give 1 selected card a random Silvered, Opaline or Prismatic edition"
+o_patto.name,Il Patto
+o_patto.text,Create a random rare Jester (needs a free slot); your ducats are halved
+o_acqua_alta.name,L'Acqua Alta
+o_acqua_alta.text,Every card in your hand becomes one random suit
+o_seduta.name,La Seduta
+o_seduta.text,Every card in your hand becomes one random rank; -1 discard each show for the rest of the run
+o_ombra.name,L'Ombra
+o_ombra.text,A random Jester becomes Shadow (+1 slot); -1 card in hand for the rest of the run
+o_vesuvio.name,Il Vesuvio
+o_vesuvio.text,Destroy 4 random cards in your hand; gain 16 ducats
+o_sosia.name,Il Sosia
+o_sosia.text,Copy a random Jester; destroy all your other Jesters
+o_malocchio.name,Il Malocchio
+o_malocchio.text,A random Jester becomes Prismatic; destroy all your other Jesters
+o_specchio_magico.name,Lo Specchio Magico
+o_specchio_magico.text,Create 2 copies of 1 selected card in your hand
+w_bottega.name,Licenza di Bottega
+w_bottega.text,+1 card slot in the shop
+w_bottega_grande.name,Bottega Grande
+w_bottega_grande.text,+1 more card slot in the shop
+w_sconto.name,Sconto del Mercante
+w_sconto.text,Shop cards and packs are 25% cheaper
+w_svendita.name,Svendita
+w_svendita.text,Shop cards and packs are 50% cheaper
+w_lustrini.name,Lustrini
+w_lustrini.text,Editions appear 2x as often
+w_paillettes.name,Paillettes
+w_paillettes.text,Editions appear 4x as often
+w_rimescolo.name,Il Rimescolo
+w_rimescolo.text,Rerolls cost 2 less
+w_rimescolo_perpetuo.name,Rimescolo Perpetuo
+w_rimescolo_perpetuo.text,Rerolls cost 2 less again
+w_baule.name,Il Baule
+w_baule.text,+1 consumable slot
+w_baule_presagi.name,Baule dei Presagi
+w_baule_presagi.text,Omens can appear in Tarocchi packs
+w_cannocchiale.name,Il Cannocchiale
+w_cannocchiale.text,Sign packs always include your most played hand's Sign
+w_osservatorio.name,L'Osservatorio
+w_osservatorio.text,Each Sign you hold gives x1.5 Mult when you play its hand
+w_copione_lungo.name,Il Copione Lungo
+w_copione_lungo.text,+1 hand each show
+w_secondo_atto.name,Il Secondo Atto
+w_secondo_atto.text,+1 more hand each show
+w_cestino.name,Il Cestino
+w_cestino.text,+1 discard each show
+w_riciclo.name,Il Riciclo
+w_riciclo.text,+1 more discard each show
+w_mazzo_tarocchi.name,Il Mazzo dei Tarocchi
+w_mazzo_tarocchi.text,Tarocchi appear 2x as often in the shop
+w_bottega_arcano.name,Bottega dell'Arcano
+w_bottega_arcano.text,Tarocchi appear 4x as often in the shop
+w_mappa_celeste.name,La Mappa Celeste
+w_mappa_celeste.text,Signs appear 2x as often in the shop
+w_atlante_celeste.name,L'Atlante Celeste
+w_atlante_celeste.text,Signs appear 4x as often in the shop
+w_salvadanaio.name,Il Salvadanaio
+w_salvadanaio.text,Interest cap 10
+w_banca_san_giorgio.name,Banca di San Giorgio
+w_banca_san_giorgio.text,Interest cap 20
+w_foglio_bianco.name,Il Foglio Bianco
+w_foglio_bianco.text,"Does nothing. A blank page, a fool's purchase..."
+w_inchiostro_nero.name,L'Inchiostro Nero
+w_inchiostro_nero.text,+1 Jester slot
+w_mazzo_prestigiatore.name,Il Mazzo del Prestigiatore
+w_mazzo_prestigiatore.text,Playing cards can appear in the shop
+w_gran_trucco.name,Il Gran Trucco
+w_gran_trucco.text,"Playing cards in the shop come enhanced, sealed or shining"
+w_clessidra.name,La Clessidra
+w_clessidra.text,Go back 1 town; -1 hand each show
+w_meridiana.name,La Meridiana
+w_meridiana.text,Go back 1 more town; -1 discard each show
+w_ricatto.name,Il Ricatto
+w_ricatto.text,"Once per town, pay 10 ducats to swap the Patron"
+w_corruzione.name,La Corruzione
+w_corruzione.text,Swap the Patron as often as you like (10 ducats each)
+w_pennello.name,Il Pennello
+w_pennello.text,+1 card in hand
+w_tavolozza.name,La Tavolozza
+w_tavolozza.text,+1 more card in hand
+pk_tarocchi_small.name,Tarocchi Pack
+pk_tarocchi_small.text,Choose 1 of 3 Tarocchi
+pk_tarocchi_big.name,Big Tarocchi Pack
+pk_tarocchi_big.text,Choose 1 of 5 Tarocchi
+pk_tarocchi_grand.name,Grand Tarocchi Pack
+pk_tarocchi_grand.text,Choose 2 of 5 Tarocchi
+pk_sign_small.name,Sign Pack
+pk_sign_small.text,Choose 1 of 3 Signs
+pk_sign_big.name,Big Sign Pack
+pk_sign_big.text,Choose 1 of 5 Signs
+pk_sign_grand.name,Grand Sign Pack
+pk_sign_grand.text,Choose 2 of 5 Signs
+pk_card_small.name,Card Pack
+pk_card_small.text,Choose 1 of 3 playing cards to add to your deck
+pk_card_big.name,Big Card Pack
+pk_card_big.text,Choose 1 of 5 playing cards to add to your deck
+pk_card_grand.name,Grand Card Pack
+pk_card_grand.text,Choose 2 of 5 playing cards to add to your deck
+pk_zanni_small.name,Jester Pack
+pk_zanni_small.text,Choose 1 of 2 Jesters
+pk_zanni_big.name,Big Jester Pack
+pk_zanni_big.text,Choose 1 of 4 Jesters
+pk_zanni_grand.name,Grand Jester Pack
+pk_zanni_grand.text,Choose 2 of 4 Jesters
+pk_omen_small.name,Omen Pack
+pk_omen_small.text,Choose 1 of 2 Omens
+pk_omen_big.name,Big Omen Pack
+pk_omen_big.text,Choose 1 of 4 Omens
+pk_omen_grand.name,Grand Omen Pack
+pk_omen_grand.text,Choose 2 of 4 Omens
+pt_censore.name,Il Censore
+pt_censore.text,All face cards are debuffed
+pt_badessa.name,La Badessa
+pt_badessa.text,All Hearts are debuffed
+pt_banchiere.name,Il Banchiere
+pt_banchiere.text,All Diamonds are debuffed
+pt_capitano_giustizia.name,Il Capitano di Giustizia
+pt_capitano_giustizia.text,All Spades are debuffed
+pt_guardacaccia.name,Il Guardacaccia
+pt_guardacaccia.text,All Clubs are debuffed
+pt_critico.name,Il Critico
+pt_critico.text,You can't play the same poker hand twice this show
+pt_purista.name,Il Purista
+pt_purista.text,Only one kind of poker hand is allowed: whichever you play first
+pt_gabelliere.name,Il Gabelliere
+pt_gabelliere.text,-1 ducat for each card you play
+pt_avaro.name,L'Avaro
+pt_avaro.text,Playing your most played hand sets your ducats to 0
+pt_fortezza.name,La Fortezza
+pt_fortezza.text,Target is x4 instead of x2
+pt_spione.name,Lo Spione
+pt_spione.text,1 card in 7 is dealt face down
+pt_maschera_grigia.name,La Maschera Grigia
+pt_maschera_grigia.text,Your first hand is dealt face down
+pt_gioco_buio.name,Il Gioco al Buio
+pt_gioco_buio.text,"After each hand, the cards you draw are face down"
+pt_ciambellano.name,Il Ciambellano
+pt_ciambellano.text,You must play exactly 5 cards
+pt_priore.name,Il Priore
+pt_priore.text,You start with 0 discards
+pt_maggiordomo.name,Il Maggiordomo
+pt_maggiordomo.text,-1 card in hand
+pt_borsaiolo.name,Il Borsaiolo
+pt_borsaiolo.text,"Each time you play, 2 random cards in your hand are discarded"
+pt_vescovo.name,Il Vescovo
+pt_vescovo.text,Playing a hand lowers its level by 1
+pt_duca.name,Il Duca
+pt_duca.text,Base Points and Mult of every hand are halved
+pt_siniscalco.name,Il Siniscalco
+pt_siniscalco.text,Cards already played this town are debuffed
+pt_impaziente.name,L'Impaziente
+pt_impaziente.text,"After every play or discard you draw exactly 3 cards, no more"
+pt_marchese.name,Il Marchese
+pt_marchese.text,Face cards are dealt face down
+pt_contessa.name,La Contessa
+pt_contessa.text,"You get only 1 hand, but the target is x1"
+pt_granduca.name,Il Granduca
+pt_granduca.text,Target is x6
+pt_granduchessa.name,La Granduchessa
+pt_granduchessa.text,"Each hand, one random Jester stops working"
+pt_inquisitore.name,L'Inquisitore
+pt_inquisitore.text,Every card is debuffed until you sell a Jester
+pt_cardinale.name,Il Cardinale
+pt_cardinale.text,"When the show starts, your Jesters are turned face down and shuffled"
+pt_regina.name,La Regina
+pt_regina.text,One card in your hand is always selected: you must play or discard it
+f_raccomandazione.name,La Raccomandazione
+f_raccomandazione.text,The next shop has a free uncommon Jester
+f_lettera_principe.name,La Lettera del Principe
+f_lettera_principe.text,The next shop has a free rare Jester
+f_velo_nero.name,Il Velo Nero
+f_velo_nero.text,The next plain Jester in the shop becomes Shadow (free)
+f_filo_argento.name,Il Filo d'Argento
+f_filo_argento.text,The next plain Jester in the shop becomes Silvered (free)
+f_perla.name,La Perla
+f_perla.text,The next plain Jester in the shop becomes Opaline (free)
+f_caleidoscopio.name,Il Caleidoscopio
+f_caleidoscopio.text,The next plain Jester in the shop becomes Prismatic (free)
+f_dote.name,La Dote
+f_dote.text,+25 ducats after you beat the next Patron
+f_sigillo_reale.name,Il Sigillo Reale
+f_sigillo_reale.text,The next shop offers an extra Warrant
+f_lasciapassare.name,Il Lasciapassare
+f_lasciapassare.text,Swap this town's Patron for free
+f_biglietto_omaggio.name,Il Biglietto Omaggio
+f_biglietto_omaggio.text,A free Grand Card Pack
+f_mazzo_incantato.name,Il Mazzo Incantato
+f_mazzo_incantato.text,A free Grand Tarocchi Pack
+f_stella_cadente.name,La Stella Cadente
+f_stella_cadente.text,A free Grand Sign Pack
+f_invito.name,L'Invito
+f_invito.text,A free Grand Jester Pack
+f_visione.name,La Visione
+f_visione.text,A free Omen Pack
+f_mancia.name,La Mancia
+f_mancia.text,+1 ducat for each hand you've played this run
+f_straccio.name,Lo Straccio
+f_straccio.text,+1 ducat for each discard you didn't use this run
+f_buono.name,Il Buono
+f_buono.text,"In the next shop, the first cards and packs are free"
+f_gemello.name,Il Gemello
+f_gemello.text,Copies the next Favor you get
+f_bagaglio.name,Il Bagaglio
+f_bagaglio.text,+3 cards in hand for the next show
+f_rimpasto.name,Il Rimpasto
+f_rimpasto.text,Rerolls start at 0 in the next shop
+f_rinforzo.name,Il Rinforzo
+f_rinforzo.text,Create up to 2 common Jesters (if there's room)
+f_fretta.name,La Fretta
+f_fretta.text,+5 ducats for each show you've skipped this run
+f_oroscopo.name,L'Oroscopo
+f_oroscopo.text,The named poker hand gains 3 levels
+f_raddoppio.name,Il Raddoppio
+f_raddoppio.text,Double your ducats (max +40)
+d_bergamo.name,Bergamo
+d_bergamo.text,+1 discard each show
+d_venezia.name,Venezia
+d_venezia.text,+1 hand each show
+d_genova.name,Genova
+d_genova.text,Start with +10 ducats
+d_siena.name,Siena
+d_siena.text,"No interest; at cash-out +2 per unused hand and +1 per unused discard"
+d_napoli.name,Napoli
+d_napoli.text,"+1 Jester slot, -1 hand each show"
+d_palermo.name,Palermo
+d_palermo.text,Start with the Il Baule Warrant and 2 Il Matto Tarocchi
+d_padova.name,Padova
+d_padova.text,Start with the Il Cannocchiale Warrant; -1 consumable slot
+d_benevento.name,Benevento
+d_benevento.text,Omens can appear in the shop; start with Il Malocchio
+d_verona.name,Verona
+d_verona.text,No face cards: a 40-card deck
+d_ferrara.name,Ferrara
+d_ferrara.text,26 Spades and 26 Hearts only
+d_bologna.name,Bologna
+d_bologna.text,"Start with Il Mazzo dei Tarocchi, La Mappa Celeste and Licenza di Bottega"
+d_firenze.name,Firenze
+d_firenze.text,"+2 cards in hand, -1 Jester slot"
+d_roma.name,Roma
+d_roma.text,"After each Patron you beat, gain Il Gemello"
+d_mantova.name,Mantova
+d_mantova.text,"Before each total, Points and Mult are evened out; targets x2"
+d_carnevale.name,Carnevale
+d_carnevale.text,Every card starts with a random rank and suit
+st_platea.name,Platea
+st_platea.text,The normal game
+st_galleria.name,Galleria
+st_galleria.text,The matinee pays nothing
+st_palco.name,Palco
+st_palco.text,Targets grow faster
+st_palco_onore.name,Palco d'Onore
+st_palco_onore.text,"Shop Jesters may be Eternal: they can't be sold or destroyed"
+st_palco_reale.name,Palco Reale
+st_palco_reale.text,-1 discard each show
+st_proscenio.name,Proscenio
+st_proscenio.text,Targets grow faster still
+st_ribalta.name,Ribalta
+st_ribalta.text,Shop Jesters may be Perishable: they stop working after 5 shows
+st_sipario_oro.name,Sipario d'Oro
+st_sipario_oro.text,"Shop Jesters may be Rented: 1 ducat to buy, -3 ducats at every cash-out"
+c_monologo.name,Il Monologo
+c_monologo.text,Only 1 Jester slot; start with an Eternal La Prima Donna
+c_tutti_fuori.name,Tutti Fuori
+c_tutti_fuori.text,No Jesters at all; +1 hand and +1 discard each show
+c_compagnia_povera.name,La Compagnia Povera
+c_compagnia_povera.text,Start with 0 ducats; no interest; +1 hand
+c_carnevale_eterno.name,Il Carnevale Eterno
+c_carnevale_eterno.text,Every card in your deck is Motley
+c_vetro_fragile.name,Il Vetro Fragile
+c_vetro_fragile.text,"Every card is Mirror, and Mirror cards shatter 1 in 2"
+c_teatro_marmo.name,Il Teatro di Marmo
+c_teatro_marmo.text,26 random cards start as Marble
+c_cinque_carte.name,Cinque Carte
+c_cinque_carte.text,"5 cards in hand, and every hand must be exactly 5 cards"
+c_tassa_lusso.name,La Tassa sul Lusso
+c_tassa_lusso.text,-1 card in hand for every 5 ducats you hold
+c_inflazione.name,L'Inflazione
+c_inflazione.text,Every purchase raises shop prices by 1 for the rest of the run
+c_ultima_replica.name,L'Ultima Replica
+c_ultima_replica.text,1 hand and 6 discards each show
+c_solo_patroni.name,Solo Patroni
+c_solo_patroni.text,Every show is a Patron show
+c_divieto.name,Il Divieto
+c_divieto.text,Flushes and Straights score nothing
+c_fame.name,La Fame
+c_fame.text,Every Jester is Perishable
+c_contratto_eterno.name,Il Contratto Eterno
+c_contratto_eterno.text,Every Jester is Eternal
+c_noleggio.name,Il Noleggio
+c_noleggio.text,Every Jester is Rented
+c_grande_salto.name,Il Grande Salto
+c_grande_salto.text,Every hand starts at level 3; -1 hand; Signs never appear
+c_bancarotta.name,La Bancarotta
+c_bancarotta.text,Start 20 ducats in debt (you may owe up to 20)
+c_notte_bianca.name,La Notte Bianca
+c_notte_bianca.text,Every card is dealt face down
+c_mazzo_doppio.name,Il Mazzo Doppio
+c_mazzo_doppio.text,"Your deck is 26 random cards, twice each"
+c_gran_finale.name,Il Gran Finale
+c_gran_finale.text,Start at town 5 with 3 random rare Jesters and 50 ducats
+enh_lacquered.name,Lacquered
+enh_lacquered.text,+30 Points when scored
+enh_masked.name,Masked
+enh_masked.text,+4 Mult when scored
+enh_motley.name,Motley
+enh_motley.text,Counts as every suit
+enh_mirror.name,Mirror
+enh_mirror.text,"x2 Mult when scored; 1 in 4 chance to shatter afterwards"
+enh_iron.name,Iron
+enh_iron.text,x1.5 Mult while held in hand
+enh_marble.name,Marble
+enh_marble.text,"+50 Points; no rank or suit; always scores"
+enh_gilt.name,Gilt
+enh_gilt.text,+3 ducats if held in hand when you win the show
+enh_charmed.name,Charmed
+enh_charmed.text,"When scored: 1 in 5 chance of +20 Mult, 1 in 15 chance of +20 ducats"
+ed_silvered.name,Silvered
+ed_silvered.text,+50 Points
+ed_opaline.name,Opaline
+ed_opaline.text,+10 Mult
+ed_prismatic.name,Prismatic
+ed_prismatic.text,x1.5 Mult
+ed_shadow.name,Shadow
+ed_shadow.text,+1 slot
+seal_ducal.name,Ducal seal
+seal_ducal.text,+3 ducats when this card scores
+seal_encore.name,Encore seal
+seal_encore.text,This card scores one extra time
+seal_astral.name,Astral seal
+seal_astral.text,"If held in hand when you win the show: create the Sign of the last hand you played"
+seal_oracle.name,Oracle seal
+seal_oracle.text,When discarded: create a random Tarocchi
+t_matto.name,Il Matto
+t_matto.gloss,The Fool
+t_matto.text,"Turn up to 2 selected cards into random cards: random rank, suit and enhancement"
+t_bagatto.name,Il Bagatto
+t_bagatto.gloss,The Magician
+t_bagatto.text,Make 1 selected card Motley
+t_papessa.name,La Papessa
+t_papessa.gloss,The High Priestess
+t_papessa.text,Create the Sign of your most played hand
+t_imperatrice.name,L'Imperatrice
+t_imperatrice.gloss,The Empress
+t_imperatrice.text,Make up to 2 selected cards Lacquered
+t_imperatore.name,L'Imperatore
+t_imperatore.gloss,The Emperor
+t_imperatore.text,Make 1 selected card Gilt
+t_papa.name,Il Papa
+t_papa.gloss,The Pope
+t_papa.text,Create up to 2 random Tarocchi (never Il Papa)
+t_amanti.name,Gli Amanti
+t_amanti.gloss,The Lovers
+t_amanti.text,Make up to 2 selected cards Masked
+t_carro.name,Il Carro
+t_carro.gloss,The Chariot
+t_carro.text,"Raise the rank of up to 2 selected cards by 1 (King to Ace, Ace to 2)"
+t_giustizia.name,La Giustizia
+t_giustizia.gloss,Justice
+t_giustizia.text,"Select 2 cards: the left one becomes an exact copy of the right one"
+t_eremita.name,L'Eremita
+t_eremita.gloss,The Hermit
+t_eremita.text,Destroy up to 2 selected cards
+t_ruota.name,La Ruota
+t_ruota.gloss,Wheel of Fortune
+t_ruota.text,Make up to 2 selected cards Charmed
+t_forza.name,La Forza
+t_forza.gloss,Strength
+t_forza.text,Make 1 selected card Iron
+t_appeso.name,L'Appeso
+t_appeso.gloss,The Hanged Man
+t_appeso.text,"1 in 4 chance: a random Jester with no edition becomes Silvered, Opaline or Prismatic"
+t_morte.name,La Morte
+t_morte.gloss,Death
+t_morte.text,Gain ducats equal to the total sell value of your Jesters (max 50)
+t_temperanza.name,La Temperanza
+t_temperanza.gloss,Temperance
+t_temperanza.text,Make 1 selected card Mirror
+t_diavolo.name,Il Diavolo
+t_diavolo.gloss,The Devil
+t_diavolo.text,Double your ducats (max +20)
+t_torre.name,La Torre
+t_torre.gloss,The Tower
+t_torre.text,Make 1 selected card Marble
+t_stella.name,La Stella
+t_stella.gloss,The Star
+t_stella.text,Turn up to 3 selected cards into Hearts
+t_luna.name,La Luna
+t_luna.gloss,The Moon
+t_luna.text,Turn up to 3 selected cards into Spades
+t_sole.name,Il Sole
+t_sole.gloss,The Sun
+t_sole.text,Turn up to 3 selected cards into Diamonds
+t_giudizio.name,Il Giudizio
+t_giudizio.gloss,Judgement
+t_giudizio.text,Create a random Jester (if there's a free Jester slot)
+t_mondo.name,Il Mondo
+t_mondo.gloss,The World
+t_mondo.text,Turn up to 3 selected cards into Clubs

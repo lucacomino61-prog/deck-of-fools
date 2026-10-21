@@ -1,0 +1,51 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="Deck of Fools"
+config/description="A poker-hand roguelike about a travelling commedia dell'arte troupe."
+run/main_scene="res://ui/main.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+boot_splash/show_image=false
+boot_splash/bg_color=Color(0.105882, 0.0627451, 0.14902, 1)
+
+[autoload]
+
+Game="*res://ui/game.gd"
+Feel="*res://ui/feel.gd"
+Online="*res://ui/online.gd"
+CardArt="*res://ui/card_art.gd"
+
+[deck_of_fools]
+
+api_url="http://localhost:8787"
+
+[display]
+
+window/size/viewport_width=640
+window/size/viewport_height=360
+window/size/window_width_override=1280
+window/size/window_height_override=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=4
+
+[internationalization]
+
+locale/translations=PackedStringArray("res://i18n/cards.en.translation")
+
+[rendering]
+
+environment/defaults/default_clear_color=Color(0.105882, 0.0627451, 0.14902, 1)
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/canvas_textures/default_texture_filter=0

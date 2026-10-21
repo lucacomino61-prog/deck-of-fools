@@ -1,0 +1,18 @@
+# Deck of Fools API. Runs locally with `npm run dev` (http://localhost:8787, local D1).
+# Not deployed: deploying needs Luca's go-ahead, a real D1 database id below, and the secrets
+# listed in README.md.
+name = "deck-of-fools-api"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "deck-of-fools"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[vars]
+PUBLIC_URL = "http://localhost:8787"
+APPLE_CLIENT_IDS = ""
+GOOGLE_CLIENT_IDS = ""
+MAIL_FROM = "Deck of Fools <no-reply@example.com>"

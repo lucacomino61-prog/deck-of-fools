@@ -1,0 +1,11 @@
+# Godot cache and per-machine files
+game/.godot/
+game/android/
+*.tmp
+
+# Builds
+build/
+
+# Dependencies and logs
+node_modules/
+*.log

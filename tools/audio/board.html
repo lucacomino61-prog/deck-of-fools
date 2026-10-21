@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deck of Fools sounds</title>
+<style>
+  :root { --bg: #1b1026; --panel: #2b1a3d; --line: #3d2756; --text: #f3ead8; --muted: #a99bbd; --gold: #f0b84a; --red: #e0503c; --blue: #3f8ed8; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.4 system-ui, sans-serif; padding: 24px 16px 48px; }
+  main { max-width: 860px; margin: 0 auto; }
+  h1 { color: var(--gold); font-size: 26px; margin: 0 0 4px; }
+  p { color: var(--muted); margin: 0 0 20px; }
+  h2 { font-size: 16px; color: var(--gold); margin: 28px 0 10px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  button { appearance: none; border: 0; border-bottom: 3px solid rgba(0, 0, 0, 0.4); border-radius: 6px; background: var(--panel); color: var(--text); font: inherit; padding: 10px 12px; text-align: left; cursor: pointer; }
+  button:hover { background: var(--line); }
+  button:active { border-bottom-width: 1px; transform: translateY(2px); }
+  button.playing { background: var(--red); }
+  .music button { background: #23407a; }
+  .music button.playing { background: var(--blue); }
+  small { display: block; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Deck of Fools: sounds</h1>
+  <p>Every sound effect and music loop in the game, made by tools/audio/make_audio.mjs. Tap to play; tap a playing loop to stop it.</p>
+  <h2>Music (loops)</h2>
+  <div class="grid music" id="music"></div>
+  <h2>Sound effects</h2>
+  <div class="grid" id="sfx"></div>
+</main>
+<script>
+  const notes = {
+    theme: 'Menu and shows: tarantella in A minor', patron: 'Patron shows: faster, D minor, drums',
+    shop: 'The shop: music box in C major', select: 'Tapping a card', deselect: 'Untapping a card',
+    deal1: 'Dealing a card (take 1)', deal2: 'Dealing a card (take 2)', deal3: 'Dealing a card (take 3)',
+    play: 'Playing a hand', points: 'A card scores Points', mult: '+Mult', xmult: '×Mult', slam: 'The total lands',
+    win: 'Show won', lose: 'Run lost', buy: 'Buying', sell: 'Selling', pack: 'Opening a pack', reroll: 'Rerolling the shop',
+    show: 'A show starts', click: 'Small buttons', tick: 'Score counting up', cash: 'Cashing out', discard: 'Discarding',
+    error: 'Not allowed',
+  };
+  let current = null;
+  function add(list, folder, name, loop) {
+    const b = document.createElement('button');
+    b.innerHTML = `${name}<small>${notes[name] || ''}</small>`;
+    const audio = new Audio(`${folder}/${name}.wav`);
+    audio.loop = loop;
+    audio.onended = () => b.classList.remove('playing');
+    b.onclick = () => {
+      if (loop && !audio.paused) { audio.pause(); b.classList.remove('playing'); return; }
+      if (loop && current && current !== audio) { current.pause(); document.querySelectorAll('.music .playing').forEach((x) => x.classList.remove('playing')); }
+      audio.currentTime = 0;
+      audio.play();
+      b.classList.add('playing');
+      if (loop) current = audio;
+    };
+    list.appendChild(b);
+  }
+  fetch('list.json').then((r) => r.json()).then((files) => {
+    files.music.forEach((n) => add(document.getElementById('music'), 'music', n, true));
+    files.sfx.forEach((n) => add(document.getElementById('sfx'), 'sfx', n, false));
+  });
+</script>
+</body>
+</html>

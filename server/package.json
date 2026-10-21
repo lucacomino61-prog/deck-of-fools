@@ -1,0 +1,13 @@
+{
+  "name": "deck-of-fools-api",
+  "private": true,
+  "description": "Deck of Fools online: accounts, cloud saves, the daily run and leaderboards (Cloudflare Worker + D1).",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "devDependencies": {
+    "wrangler": "4.142.0"
+  }
+}
