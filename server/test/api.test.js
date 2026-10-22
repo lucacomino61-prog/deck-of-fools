@@ -254,6 +254,18 @@ test('best-hand and highest-town leaderboards rank players, with the asker\'s ow
   assert.equal(hands.data.entries.some((e) => 'user_id' in e), false, 'ids stay private');
 });
 
+test('a run helped by Maestri, props or the campaign counts in stats but not on the boards', async () => {
+  const c = await guest();
+  const body = run({ best_hand: 8e15, town: 7, stake: 7, actions: Array.from({ length: 7 }, () => ({ a: 'play' })), assisted: true });
+  assert.equal((await call('POST', '/v1/runs', { token: c.token, body })).status, 201);
+  const hands = await call('GET', '/v1/leaderboards/best_hand', { token: c.token });
+  assert.equal(hands.data.entries.some((e) => e.name === c.user.name), false);
+  assert.equal(hands.data.me, null);
+  const towns = await call('GET', '/v1/leaderboards/town?stake=7', { token: c.token });
+  assert.equal(towns.data.entries.some((e) => e.name === c.user.name), false);
+  assert.equal((await call('GET', '/v1/me/stats', { token: c.token })).data.runs, 1);
+});
+
 test('profile stats come from the player\'s runs', async () => {
   const g = await guest();
   await call('POST', '/v1/runs', { token: g.token, body: run({ deck: 'd_venezia', won: true, town: 8, actions: Array.from({ length: 8 }, () => ({ a: 'play' })), jesters: ['z_zanni', 'z_lazzo'] }) });

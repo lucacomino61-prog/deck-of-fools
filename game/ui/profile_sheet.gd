@@ -13,6 +13,7 @@ var _status: Label
 func _init() -> void:
 	title_text = "Profile"
 	panel_size = Vector2(560, 340)
+	wide = true
 
 
 func _ready() -> void:
@@ -46,7 +47,7 @@ func _build() -> void:
 	columns.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	body.add_child(columns)
 	var left := VBoxContainer.new()
-	left.custom_minimum_size = Vector2(240, 0)
+	left.custom_minimum_size = Vector2(_left_width(), 0)
 	left.add_theme_constant_override("separation", 5)
 	columns.add_child(left)
 	var right := VBoxContainer.new()
@@ -136,10 +137,15 @@ func _build_stats(col: VBoxContainer) -> void:
 
 
 func _wrapped(text: String, colour: Color) -> Label:
-	var l := UiTheme.label(text, 10, colour)
+	var l := UiTheme.label(text, 11, colour)
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	l.custom_minimum_size = Vector2(240, 0)
+	l.custom_minimum_size = Vector2(_left_width(), 0)
 	return l
+
+
+## The account column: a bit under half the sheet, the stats get the rest.
+func _left_width() -> float:
+	return floorf(panel_size.x * 0.43)
 
 
 func _open_account(mode: String) -> void:

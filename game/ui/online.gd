@@ -297,6 +297,8 @@ func submit_run(run: RunState, meta: Dictionary) -> void:
 		"won": run.won, "town": run.town, "best_hand": float(run.counters.get("best_hand", 0.0)),
 		"jesters": run.zanni.map(func(z: ItemCard) -> String: return z.def_id),
 		"actions": run.action_log,
+		# Maestri, props or the campaign helped (batch 13): kept off the leaderboards.
+		"assisted": run.assisted(),
 	}
 	if meta.has("daily_date"):
 		entry["daily_date"] = meta["daily_date"]

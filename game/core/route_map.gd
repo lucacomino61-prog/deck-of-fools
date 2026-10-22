@@ -18,11 +18,13 @@ const NEAREST := 5
 const CENTRE := Vector2(12.6, 42.4)
 
 
-static func plan(run: RunState, home: String) -> Array:
+## The route from `home` to `last` (Venezia, or a campaign chapter's city; it can be home
+## again, a loop).
+static func plan(run: RunState, home: String, last := CityCards.VENEZIA) -> Array:
 	var r := run.rng("route")
-	var used := {home: true, CityCards.VENEZIA: true}
+	var used := {home: true, last: true}
 	var start := _pos(home)
-	var goal := _pos(CityCards.VENEZIA)
+	var goal := _pos(last)
 	# The loop bends round a point on the far side of Italy from home.
 	var turn := CENTRE + (CENTRE - start) * 0.9
 	turn = Vector2(clampf(turn.x, 8.0, 17.0), clampf(turn.y, 38.5, 46.0))
@@ -32,7 +34,7 @@ static func plan(run: RunState, home: String) -> Array:
 		var on_loop := start * (1.0 - t) * (1.0 - t) + turn * 2.0 * (1.0 - t) * t + goal * t * t
 		var aim := on_loop + Vector2((r.next_float() - 0.5) * 2.0 * SPREAD, (r.next_float() - 0.5) * 2.0 * SPREAD)
 		route.append(_row_near(r, aim, used))
-	route.append([{"city": CityCards.VENEZIA, "to": []}])
+	route.append([{"city": last, "to": []}])
 	for row in range(0, ROWS - 1):
 		_connect(r, route[row], route[row + 1])
 	return route

@@ -49,6 +49,13 @@ static func open(run: RunState, def: ContentDef) -> Array[Dictionary]:
 		out.append(entry)
 		if entry.has("id"):
 			taken[entry["id"]] = true
+	# Campaign chapter 6 (Firenze): every pack also holds an enhanced playing card.
+	if run.stat("pack_enhanced_card") > 0:
+		var card := random_card(run, run.rng("pack_enhanced"), true)
+		var enhancements := ContentDB.pool("enhancement")
+		if card["enh"] == "" and not enhancements.is_empty():
+			card["enh"] = enhancements[run.rng("pack_enhanced").below(enhancements.size())].id
+		out.append({"kind": "card", "card": card})
 	return out
 
 

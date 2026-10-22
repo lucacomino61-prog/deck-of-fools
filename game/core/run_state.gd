@@ -14,10 +14,16 @@ extends RefCounted
 ##   pick {index, cards} · skip_pack        (while a pack is open)
 ##   travel {index, slot}                   (on the map: the next city, and its choice if any)
 ##   encore · bow · play {cards}            (when the crowd demands an Encore)
+##   swap_scenario                          (the prop Il Suggeritore: another Scenario)
 ##
 ## Batch 12 (the tour) only runs on a city deck, which gives the run a route: the Map of
 ## Italy, the city twists, Scenarios, the crowd's mood and the Encore. A run on any other
 ## deck (the rules tests' stand-in) plays the classic rules.
+##
+## Batch 13 (progression) comes in through `extras`, what the player's profile brings to a
+## normal or campaign run: Maestri, the carried props, the nemesis, the campaign chapter and
+## the Jester carried into it, and the rematch. Daily, seeded and challenge runs get none,
+## so they play the same for everyone. Fame earned this run is counted here for the profile.
 
 ## PACK, MAP and ENCORE were added last so saved phase numbers keep their meaning.
 enum Phase { CHOOSE_SHOW, IN_SHOW, CASH_OUT, SHOP, LOST, PACK, MAP, ENCORE }
@@ -42,7 +48,16 @@ const WALKOUT_DUCATS := 3
 const ENCORE_MOOD := 8
 const ENCORE_SHARE := 0.5
 
-const SAVE_VERSION := 2
+## Patron rivalry (batch 13): in towns 5–7 a Patron beaten earlier in the run comes back,
+## 1 in 5, at most once a run, with its target ×1.25 and its reward doubled. Beating your
+## nemesis (the Patron that ended your last run) pays NEMESIS_DUCATS.
+const REMATCH_CHANCE := 0.2
+const REMATCH_TOWNS := [5, 6, 7]
+const REMATCH_TARGET := 1.25
+const REMATCH_REWARD := 2
+const NEMESIS_DUCATS := 10
+
+const SAVE_VERSION := 3
 
 const BASE_STATS := {
 	"hands": 4,
@@ -151,6 +166,17 @@ const BASE_STATS := {
 	"reverse_jesters": 0,
 	## Gilt cards' ducats are multiplied by this.
 	"gilt_mult": 1,
+	## Wagon props and campaign chapters (batch 13).
+	## The crowd's mood when a show starts.
+	"mood_start": MOOD_START,
+	## Scenario swaps allowed per town.
+	"scenario_swaps": 0,
+	## Ducats off the first reroll in each shop.
+	"first_reroll_discount": 0,
+	## Extra Jesters offered in the run's first shop.
+	"first_shop_jesters": 0,
+	## Above 0, every booster pack also holds an enhanced playing card.
+	"pack_enhanced_card": 0,
 }
 
 ## Hooks a copying Jester (data "copies": "right" or "leftmost") borrows from its target.
@@ -249,15 +275,32 @@ var scenario_beat := 0
 ## The crowd's mood (0–10) and a standing ovation waiting for the next hand.
 var mood := MOOD_START
 var ovation := false
-## While a duo fires its parts: their numbers' growth, and the duo itself (for their seat).
+## While a duo or a Maestro fires: how much its numbers grow; and whether a duo's parts are
+## firing (a Maestro inside a duo grows by the duo's rule only).
 var duo_scale := 1.0
 var duo_item: ItemCard = null
+var _in_duo := false
+
+## Batch 13: what the profile brought ({maestri, props, nemesis, chapter, carry, rivalry}),
+## and the parts of it the rules read often.
+var extras: Dictionary = {}
+var maestri: Dictionary = {}
+var props: Array[String] = []
+var chapter := ""
+## Patrons beaten this run, and the rematch drawn for a later town ({town, patron}).
+var beaten: Array[String] = []
+var rematch: Dictionary = {}
+## Fame each Jester earned this run (def id → fame), handed to the profile at the end.
+var fame: Dictionary = {}
+## Scenario swaps used in this town (Il Suggeritore).
+var town_scenario_swaps := 0
 
 
 ## A new run. `challenge_id` sets up a challenge run; `locked_ids` are the cards the
-## player's profile hasn't unlocked yet, which never turn up in this run.
+## player's profile hasn't unlocked yet, which never turn up in this run; `run_extras` is
+## what the profile brings (batch 13; Profile.extras_for).
 static func create(seed_value: String, deck := "standard", stake_level := 1, challenge_id := "",
-		locked_ids: Array = []) -> RunState:
+		locked_ids: Array = [], run_extras := {}) -> RunState:
 	var run := RunState.new()
 	run.seed_text = seed_value
 	run.deck_id = deck
@@ -265,10 +308,12 @@ static func create(seed_value: String, deck := "standard", stake_level := 1, cha
 	run.challenge = challenge_id
 	for id in locked_ids:
 		run.locked[str(id)] = true
+	run._take_extras(run_extras)
 	run._build_deck()
 	run._plan_route()
 	run.ducats = run.stat("start_ducats")
 	run.fire_all("run_start", run)
+	run._join_carried()
 	run._start_town()
 	run._update_feats()
 	return run
@@ -276,8 +321,8 @@ static func create(seed_value: String, deck := "standard", stake_level := 1, cha
 
 ## A fresh run with every logged action applied again.
 static func replay(seed_value: String, deck: String, stake_level: int, actions: Array,
-		challenge_id := "", locked_ids: Array = []) -> RunState:
-	var run := create(seed_value, deck, stake_level, challenge_id, locked_ids)
+		challenge_id := "", locked_ids: Array = [], run_extras := {}) -> RunState:
+	var run := create(seed_value, deck, stake_level, challenge_id, locked_ids, run_extras)
 	for action in actions:
 		var result := run.apply(action)
 		if not result["ok"]:
@@ -358,7 +403,7 @@ func fire_item(item: ItemCard, hook: String, subject: Object, extra := []) -> Va
 	if def == null:
 		return null
 	if not def.data.has("copies"):
-		return def.fire(hook, [subject, item] + extra)
+		return _fire(def, hook, [subject, item] + extra, item)
 	if not COPYABLE.has(hook):
 		return null
 	var target := copy_target(item)
@@ -367,9 +412,33 @@ func fire_item(item: ItemCard, hook: String, subject: Object, extra := []) -> Va
 	var outer := _copy_label
 	if outer == "":
 		_copy_label = item_source(item)
-	var result: Variant = target.def().fire(hook, [subject, target] + extra)
+	var result: Variant = _fire(target.def(), hook, [subject, target] + extra, target)
 	_copy_label = outer
 	return result
+
+
+## Fires a source's hook. While a Maestro Jester fires, its numbers grow by Fame.SCALE (the
+## duo rule, through duo_scale), and so do the ducats it hands out directly and what it pays
+## at cash-out. Inside a duo the duo's own rule applies instead.
+func _fire(def: ContentDef, hook: String, args: Array, item: ItemCard) -> Variant:
+	if _in_duo or def.kind != "zanni" or not is_maestro(item):
+		return def.fire(hook, args)
+	var outer := duo_scale
+	var before := ducats
+	duo_scale = Fame.SCALE
+	var result: Variant = def.fire(hook, args)
+	duo_scale = outer
+	if args[0] is RunState and ducats != before:
+		ducats += roundi((ducats - before) * (Fame.SCALE - 1.0))
+	if hook == "payout" and result != null and int(result) != 0:
+		result = roundi(int(result) * Fame.SCALE)
+	return result
+
+
+## Whether this Jester plays as its Maestro version in this run (a duo never is; its parts
+## can be).
+func is_maestro(item: ItemCard) -> bool:
+	return item != null and item.parts.is_empty() and maestri.has(item.def_id)
 
 
 ## The Jester whose effect a copier borrows, following chains of copiers; null if none.
@@ -394,7 +463,7 @@ func fire_all(hook: String, subject: Object, extra := []) -> void:
 	for src in _sources():
 		var def: ContentDef = src[0]
 		if def.has_hook(hook):
-			def.fire(hook, [subject, src[1]] + extra)
+			_fire(def, hook, [subject, src[1]] + extra, src[1])
 
 
 ## An "N in M" chance from the named stream, scaled by the luck stat (never, in a preview).
@@ -545,6 +614,8 @@ func count_retriggers(ctx: ScoreContext, card: PlayingCard, hook: String) -> int
 			var extra: Variant = fire_item(item, hook, ctx, [card])
 			if extra != null:
 				total += int(extra)
+				if int(extra) > 0:
+					_mark_fired(item)
 	return total
 
 
@@ -602,6 +673,8 @@ func target_for_show(index: int) -> float:
 		if patron != null:
 			factor = float(patron.data.get("target_mult", factor))
 		factor *= stat("patron_target_pct") / 100.0
+		if is_rematch():
+			factor *= REMATCH_TARGET
 	factor *= stat("target_pct") / 100.0
 	return floorf(Shows.base_target(town, stat("target_scaling")) * factor)
 
@@ -614,10 +687,11 @@ func current_patron() -> String:
 	return str(show_counters.get("patron", ""))
 
 
-## Everything that can react to the run, in firing order: deck, challenge, stakes, the city,
-## warrants, zanni (each followed by its edition), consumables' editions, pending favors, then
-## the current patron while its show is on, unless the sources before it mute patrons; last,
-## during a show on tour, the Scenario's and the crowd's rules.
+## Everything that can react to the run, in firing order: deck, challenge, stakes, the
+## campaign chapter (and its rule city's twist), carried props, the city, warrants, zanni
+## (each followed by its edition), consumables' editions, pending favors, then the current
+## patron while its show is on, unless the sources before it mute patrons; last, during a
+## show on tour, the Scenario's and the crowd's rules.
 func _sources() -> Array:
 	var out := []
 	var deck_def := ContentDB.get_def(deck_id)
@@ -629,8 +703,20 @@ func _sources() -> Array:
 	for d in ContentDB.pool("stake"):
 		if int(d.data.get("level", 0)) <= stake:
 			out.append([d, null])
+	var chapter_def := ContentDB.get_def(chapter)
+	var rule_city := ""
+	if chapter_def != null:
+		out.append([chapter_def, null])
+		rule_city = str(chapter_def.data.get("rule_city", ""))
+		var rule_def := ContentDB.get_def(rule_city)
+		if rule_def != null:
+			out.append([rule_def, null])
+	for p in props:
+		var d := ContentDB.get_def(p)
+		if d != null:
+			out.append([d, null])
 	var city_def := ContentDB.get_def(city)
-	if city_def != null:
+	if city_def != null and city != rule_city:
 		out.append([city_def, null])
 	for w in warrants:
 		var d := ContentDB.get_def(w)
@@ -712,6 +798,8 @@ func apply(action: Dictionary) -> Dictionary:
 			result = _encore()
 		"bow":
 			result = _bow()
+		"swap_scenario":
+			result = _swap_scenario()
 		_:
 			result = _fail("unknown action")
 	if result["ok"]:
@@ -762,10 +850,10 @@ func _select_show(perform := false) -> Dictionary:
 		return _fail("not choosing a show")
 	phase = Phase.IN_SHOW
 	show_score = 0.0
-	show_counters = {"hands_played": 0, "discards_used": 0, "types": []}
+	show_counters = {"hands_played": 0, "discards_used": 0, "types": [], "fired": []}
 	scenario_on = perform and tour and scenario != ""
 	scenario_beat = 0
-	mood = MOOD_START
+	mood = clampi(stat("mood_start"), 0, MOOD_MAX)
 	ovation = false
 	for card in full_deck:
 		card.debuffed = false
@@ -850,6 +938,8 @@ func _play(ids: Array) -> Dictionary:
 		if not ctx.destroyed.has(card):
 			discard_pile.append(card)
 	_hand_feats(ctx)
+	for id in _fired_in(ctx.events):
+		_mark_fired_id(id)
 	fire_all("hand_played", self, [played])
 	if tour:
 		_crowd_reacts(ctx)
@@ -884,6 +974,7 @@ func _crowd_reacts(ctx: ScoreContext) -> void:
 			if scenario_beat >= ScenarioCards.BEATS:
 				scenario_on = false
 				show_counters["scenario"] = "done"
+				_count("scenarios_done")
 		else:
 			delta -= 3
 			scenario_on = false
@@ -993,6 +1084,12 @@ func _cash_out() -> Dictionary:
 	shop = ShopState.new()
 	shop.reroll_cost = stat("reroll_base")
 	_fill_shop()
+	if int(counters.get("shops", 0)) == 0:
+		for i in stat("first_shop_jesters"):
+			var offer := _roll_offer("zanni")
+			if not offer.is_empty():
+				shop.offers.append(offer)
+	_count("shops")
 	shop.packs = PackMaker.roll_shop_packs(self)
 	fire_all("shop_enter", self)
 	return _ok({"ducats": total})
@@ -1075,11 +1172,13 @@ func offer_price(offer: Dictionary) -> int:
 	return maxi(1, cost - stat("shop_discount"))
 
 
-## What the next reroll costs: free while free rerolls remain in this shop.
+## What the next reroll costs: free while free rerolls remain in this shop; the first one
+## in each shop can be cheaper (the prop Il Mulo Testardo).
 func reroll_price() -> int:
 	if shop.rerolls < stat("free_rerolls"):
 		return 0
-	return maxi(0, shop.reroll_cost - stat("reroll_discount"))
+	var first_off := stat("first_reroll_discount") if shop.rerolls == 0 else 0
+	return maxi(0, shop.reroll_cost - stat("reroll_discount") - first_off)
 
 
 ## Changes a stat for the rest of the run, e.g. an Omen's "−1 card in hand".
@@ -1266,10 +1365,13 @@ func _swap_patron() -> Dictionary:
 	return _ok({"patron": town_patron})
 
 
-func _patron_pool() -> Array[ContentDef]:
-	var finale := town % Shows.FINAL_TOWN == 0
+## The Patrons a town can draw (never the campaign's own, Messer Grifone).
+func _patron_pool(for_town := -1) -> Array[ContentDef]:
+	var t := town if for_town < 0 else for_town
+	var finale := t % Shows.FINAL_TOWN == 0
 	return ContentDB.pool("patron", func(d: ContentDef) -> bool:
-		return bool(d.data.get("finale", false)) == finale and int(d.data.get("min_town", 1)) <= town)
+		return bool(d.data.get("finale", false)) == finale and int(d.data.get("min_town", 1)) <= t \
+			and not bool(d.data.get("campaign", false)))
 
 
 ## The Warrant offered this town: one not owned yet whose base Warrant, if any, is owned.
@@ -1312,6 +1414,10 @@ func _start_town() -> void:
 	phase = Phase.CHOOSE_SHOW
 	var patrons := _patron_pool()
 	town_patron = patrons[rng("patron").below(patrons.size())].id if not patrons.is_empty() else ""
+	var waiting := patron_waiting(route_row, route_col)
+	if waiting != "":
+		town_patron = waiting
+	town_scenario_swaps = 0
 	var favor_pool := ContentDB.pool("favor")
 	town_favors = ["", ""]
 	town_favor_notes = ["", ""]
@@ -1331,23 +1437,227 @@ func _start_town() -> void:
 
 # --- the tour (batch 12) ---
 
-## The deck's home city starts the route; without one the run plays the classic rules.
+## The deck's home city starts the route; without one the run plays the classic rules. A
+## campaign chapter runs from where the last chapter ended to its own city instead.
 func _plan_route() -> void:
 	var home := CityCards.home_of(deck_id, self)
+	var goal := CityCards.VENEZIA
+	var chapter_def := ContentDB.get_def(chapter)
+	if chapter_def != null:
+		home = str(chapter_def.data["start"])
+		goal = str(chapter_def.data["city"])
 	if home == "":
 		return
 	tour = true
-	route = RouteMap.plan(self, home)
+	route = RouteMap.plan(self, home, goal)
 	route_row = 0
 	route_col = 0
 	path.assign([0])
 	city = home
+	_light_lantern(1)
 
 
 ## Makes sure the route has a row after the troupe's (endless play grows it).
 func _extend_route() -> void:
 	while route.size() < route_row + 2:
 		RouteMap.extend(self, route)
+		_light_lantern(route.size() - 1)
+
+
+## La Lanterna: the Patron of every city from row `from` on is drawn with the map, so the map
+## can show it (row r is town r + 1).
+func _light_lantern(from: int) -> void:
+	if not props.any(func(p: String) -> bool: return ContentDB.get_def(p) != null and ContentDB.get_def(p).data.get("lantern", false)):
+		return
+	var r := rng("lantern")
+	for row in range(from, route.size()):
+		var pool := _patron_pool(row + 1)
+		if pool.is_empty():
+			continue
+		for node in route[row]:
+			if not (node as Dictionary).has("patron"):
+				node["patron"] = pool[r.below(pool.size())].id
+
+
+## The Patron already settled for a town (row and column on the map): the chapter's story
+## Patron in town 8, the nemesis, a rematch, or the one La Lanterna drew; "" when the town
+## draws its own on arrival.
+func patron_waiting(row: int, col: int, for_town := -1) -> String:
+	var t := town if for_town < 0 else for_town
+	var chapter_def := ContentDB.get_def(chapter)
+	if chapter_def != null and t == Shows.FINAL_TOWN:
+		return str(chapter_def.data["patron"])
+	if t == nemesis_town():
+		return nemesis_patron()
+	if int(rematch.get("town", -1)) == t:
+		return str(rematch["patron"])
+	if row >= 0 and row < route.size() and col >= 0 and col < (route[row] as Array).size():
+		return str(((route[row] as Array)[col] as Dictionary).get("patron", ""))
+	return ""
+
+
+## The nemesis this run brings, if it can appear in it ("" otherwise): Messer Grifone only in
+## the campaign's last chapter.
+func nemesis_patron() -> String:
+	var n: Dictionary = extras.get("nemesis", {})
+	var d := ContentDB.get_def(str(n.get("patron", "")))
+	if d == null or d.kind != "patron":
+		return ""
+	if bool(d.data.get("campaign", false)) and chapter != CampaignCards.id_of(CampaignCards.COUNT):
+		return ""
+	return d.id
+
+
+## The town where the nemesis waits: where it beat you, within the towns it may appear in
+## (a finale Patron in town 8); -1 for none.
+func nemesis_town() -> int:
+	var id := nemesis_patron()
+	if id == "":
+		return -1
+	var d := ContentDB.get_def(id)
+	if bool(d.data.get("finale", false)):
+		return Shows.FINAL_TOWN
+	return clampi(int((extras["nemesis"] as Dictionary).get("town", 1)), int(d.data.get("min_town", 1)), Shows.FINAL_TOWN - 1)
+
+
+## This town's Patron is the nemesis (and the troupe is on its third show or before it).
+func is_nemesis() -> bool:
+	return town_patron != "" and town == nemesis_town() and town_patron == nemesis_patron()
+
+
+func is_rematch() -> bool:
+	return int(rematch.get("town", -1)) == town and town_patron == str(rematch.get("patron", ""))
+
+
+## On the way to a new town (5–7): 1 in 5, a Patron beaten earlier this run comes back for
+## it, once a run (never the nemesis, never where the nemesis or a story Patron waits).
+func _roll_rematch() -> void:
+	if not bool(extras.get("rivalry", false)) or not rematch.is_empty() or not REMATCH_TOWNS.has(town):
+		return
+	if town == nemesis_town() or (chapter != "" and town == Shows.FINAL_TOWN):
+		return
+	var pool := beaten.filter(func(id: String) -> bool:
+		var d := ContentDB.get_def(id)
+		return d != null and id != nemesis_patron() and not bool(d.data.get("finale", false)) \
+			and not bool(d.data.get("campaign", false)))
+	if pool.is_empty():
+		return
+	var r := rng("rematch")
+	if r.chance(REMATCH_CHANCE):
+		rematch = {"town": town, "patron": pool[r.below(pool.size())]}
+
+
+## Il Suggeritore: the next show's Scenario swapped for another of its tier.
+func _swap_scenario() -> Dictionary:
+	if phase != Phase.CHOOSE_SHOW or not tour or scenario == "":
+		return _fail("no Scenario to swap")
+	if town_scenario_swaps >= stat("scenario_swaps"):
+		return _fail("no Scenario swaps left this town")
+	town_scenario_swaps += 1
+	scenario = ScenarioCards.pick(self, rng("scenario"), scenario)
+	return _ok({"scenario": scenario})
+
+
+## The Scenario tier a campaign chapter fixes (0: by town).
+func scenario_tier() -> int:
+	var chapter_def := ContentDB.get_def(chapter)
+	return int(chapter_def.data.get("scenario_tier", 0)) if chapter_def != null else 0
+
+
+# --- batch 13: extras and fame ---
+
+## Takes what the profile brings: {maestri: [ids], props: [ids], nemesis: {patron, town},
+## chapter, carry: {id, parts}, rivalry}.
+func _take_extras(run_extras: Dictionary) -> void:
+	extras = run_extras.duplicate(true)
+	maestri.clear()
+	for id in extras.get("maestri", []):
+		maestri[str(id)] = true
+	props.clear()
+	for id in extras.get("props", []):
+		if ContentDB.get_def(str(id)) != null:
+			props.append(str(id))
+	chapter = str(extras.get("chapter", ""))
+
+
+## The Jester carried in from the last campaign chapter joins first (a duo with its parts).
+func _join_carried() -> void:
+	var carry: Dictionary = extras.get("carry", {})
+	var id := str(carry.get("id", ""))
+	var def := ContentDB.get_def(id)
+	if def == null:
+		return
+	var parts: Array = carry.get("parts", [])
+	if def.kind == "lazzo" and parts.size() == 2:
+		var duo := ItemCard.make(id, 0)
+		for p in parts:
+			var pd := ContentDB.get_def(str(p))
+			if pd == null:
+				return
+			duo.parts.append(ItemCard.make(pd.id, pd.cost))
+			duo.cost += pd.cost
+		_join(duo)
+	elif def.kind == "zanni":
+		_join(ItemCard.make(id, def.cost))
+
+
+## Whether the profile brought anything that changes play (Maestri in use, props, a
+## campaign chapter or a carried Jester): such runs stay off the leaderboards.
+func assisted() -> bool:
+	return not maestri.is_empty() or not props.is_empty() or chapter != "" or not (extras.get("carry", {}) as Dictionary).is_empty()
+
+
+## The def ids of every Jester in the troupe, a duo counted as its two Jesters.
+func troupe_ids() -> Array[String]:
+	var out: Array[String] = []
+	for z in zanni:
+		if z.parts.is_empty():
+			out.append(z.def_id)
+		else:
+			for p in z.parts:
+				out.append(p.def_id)
+	return out
+
+
+func _add_fame(ids: Array, amount: int) -> void:
+	for id in ids:
+		fame[id] = int(fame.get(id, 0)) + amount
+
+
+## The Jesters that fired in a scored hand, from its events ("zanni:<id>#<seat>").
+func _fired_in(events: Array) -> Array[String]:
+	var out: Array[String] = []
+	for e in events:
+		var src := str(e.get("src", ""))
+		if not src.begins_with("zanni:"):
+			continue
+		var seat := int(src.get_slice("#", 1))
+		if seat < 0 or seat >= zanni.size():
+			continue
+		var item := zanni[seat]
+		var ids: Array = [item.def_id] if item.parts.is_empty() else item.parts.map(func(p: ItemCard) -> String: return p.def_id)
+		for id in ids:
+			if not out.has(id):
+				out.append(id)
+	return out
+
+
+## Notes that a Jester (both, for a duo) did something this show, for its fame.
+func _mark_fired(item: ItemCard) -> void:
+	if item.parts.is_empty():
+		_mark_fired_id(item.def_id)
+	else:
+		for p in item.parts:
+			_mark_fired_id(p.def_id)
+
+
+func _mark_fired_id(id: String) -> void:
+	if previewing or not (phase == Phase.IN_SHOW or phase == Phase.ENCORE or phase == Phase.CASH_OUT):
+		return
+	var fired: Array = show_counters.get("fired", [])
+	if not fired.has(id):
+		fired.append(id)
+	show_counters["fired"] = fired
 
 
 ## The roads out of the troupe's city: columns in the next row.
@@ -1429,6 +1739,7 @@ func _encore_play(ids: Array) -> Dictionary:
 		if total > 0:
 			payout.append({"src": "encore", "v": total})
 		_count("encores")
+		_add_fame(_fired_in(ctx.events), Fame.ENCORE)
 	else:
 		payout = payout.filter(func(p: Dictionary) -> bool: return p["src"] != "show")
 	show_counters["encore"] = "hit" if hit else "missed"
@@ -1475,6 +1786,7 @@ func _advance_show() -> void:
 	show_index += 1
 	if show_index > Shows.PATRON:
 		town += 1
+		_roll_rematch()
 		if tour:
 			_extend_route()
 			show_index = Shows.MATINEE
@@ -1507,9 +1819,36 @@ func _win_show(rescued := false) -> void:
 	fire_all("show_end", self)
 	_age_perishables()
 	payout = _compute_payout(rescued)
+	_show_fame()
+	if show_index == Shows.PATRON:
+		beaten.append(town_patron)
+		if is_nemesis():
+			_count("nemesis_beaten")
+			feats["vendetta"] = true
+			_add_fame(troupe_ids(), Fame.NEMESIS)
+	if town == Shows.FINAL_TOWN and show_index == Shows.PATRON:
+		_add_fame(troupe_ids(), Fame.RUN_WON)
 	if tour and not rescued and mood >= ENCORE_MOOD:
 		phase = Phase.ENCORE
 		show_counters["encore"] = "offered"
+
+
+## A won show: fame for every Jester still in the troupe that fired in it; one that always
+## works (a slot, a rule; Fame.is_active) counts as firing while it's working.
+func _show_fame() -> void:
+	for z in zanni:
+		if z.debuffed:
+			continue
+		var members: Array[ItemCard] = [z]
+		if not z.parts.is_empty():
+			members = z.parts
+		for item in members:
+			var d: ContentDef = item.def()
+			if d != null and not Fame.is_active(d) and not d.data.has("copies"):
+				_mark_fired_id(item.def_id)
+	var troupe := troupe_ids()
+	var fired: Array = show_counters.get("fired", [])
+	_add_fame(fired.filter(func(id: String) -> bool: return troupe.has(id)), Fame.SHOW)
 
 
 ## Perishable Jesters count down one show each win; at 0 they stop working for good.
@@ -1529,8 +1868,12 @@ func _compute_payout(rescued := false) -> Array[Dictionary]:
 		var patron := ContentDB.get_def(town_patron)
 		if patron != null:
 			reward += int(patron.data.get("reward_bonus", 0))
+		if is_rematch():
+			reward *= REMATCH_REWARD
 	if reward > 0:
 		items.append({"src": "show", "v": reward})
+	if show_index == Shows.PATRON and is_nemesis():
+		items.append({"src": "nemesis", "v": NEMESIS_DUCATS})
 	var per_hand := stat("hand_reward")
 	if hands_left > 0 and per_hand > 0:
 		items.append({"src": "hands", "v": hands_left * per_hand})
@@ -1565,6 +1908,9 @@ func _compute_payout(rescued := false) -> Array[Dictionary]:
 		var v: Variant = fire_item(item, "payout", self)
 		if v != null and int(v) != 0:
 			items.append({"src": item_source(item), "v": int(v)})
+			_mark_fired(item)
+		if is_maestro(item) and Fame.FLAT.has(item.def_id):
+			items.append({"src": item_source(item), "v": Fame.FLAT_DUCATS})
 	return items
 
 
@@ -1595,7 +1941,8 @@ func _fill_shop() -> void:
 			shop.offers.append(offer)
 
 
-func _roll_offer() -> Dictionary:
+## One shop offer of a random kind, or of `force_kind` (a prop's extra Jester).
+func _roll_offer(force_kind := "") -> Dictionary:
 	var r := rng("shop")
 	var kinds: Array[String] = []
 	var weights := []
@@ -1609,10 +1956,14 @@ func _roll_offer() -> Dictionary:
 	if stat("omen_rate") > 0 and not _shop_pool("omen").is_empty():
 		kinds.append("omen")
 		weights.append(stat("omen_rate"))
-	var k := r.pick_weighted(weights)
-	if k < 0:
+	var kind := force_kind
+	if kind == "":
+		var k := r.pick_weighted(weights)
+		if k < 0:
+			return {}
+		kind = kinds[k]
+	elif _shop_pool(kind).is_empty():
 		return {}
-	var kind := kinds[k]
 	if kind == "card":
 		var card := PackMaker.random_card(self, r, stat("card_quality") > 0)
 		var upgraded: bool = card["enh"] != "" or card["ed"] != "" or card["seal"] != ""
@@ -1798,6 +2149,8 @@ func to_dict(for_save := true) -> Dictionary:
 		"tour": tour, "route": route.duplicate(true), "route_row": route_row, "route_col": route_col, "path": path.duplicate(), "city": city,
 		"town_option": town_option, "scenario": scenario, "scenario_on": scenario_on,
 		"scenario_beat": scenario_beat, "mood": mood, "ovation": ovation,
+		"extras": extras.duplicate(true), "beaten": beaten.duplicate(), "rematch": rematch.duplicate(),
+		"fame": fame.duplicate(), "scenario_swaps": town_scenario_swaps,
 	}
 	return clean(data) if for_save else data
 
@@ -1875,7 +2228,10 @@ static func from_dict(d: Dictionary) -> RunState:
 			var to: Array[int] = []
 			for c in node["to"]:
 				to.append(int(c))
-			nodes.append({"city": str(node["city"]), "to": to})
+			var copy := {"city": str(node["city"]), "to": to}
+			if node.has("patron"):
+				copy["patron"] = str(node["patron"])
+			nodes.append(copy)
 		run.route.append(nodes)
 	run.route_row = int(d.get("route_row", 0))
 	run.route_col = int(d.get("route_col", 0))
@@ -1888,6 +2244,16 @@ static func from_dict(d: Dictionary) -> RunState:
 	run.scenario_beat = int(d.get("scenario_beat", 0))
 	run.mood = int(d.get("mood", MOOD_START))
 	run.ovation = bool(d.get("ovation", false))
+	# Saves from before batch 13 (version 2) have none of these: a run with no extras.
+	run._take_extras(d.get("extras", {}))
+	for id in d.get("beaten", []):
+		run.beaten.append(str(id))
+	var re: Dictionary = d.get("rematch", {})
+	if not re.is_empty():
+		run.rematch = {"town": int(re["town"]), "patron": str(re["patron"])}
+	for id in d.get("fame", {}):
+		run.fame[str(id)] = int(d["fame"][id])
+	run.town_scenario_swaps = int(d.get("scenario_swaps", 0))
 	return run
 
 

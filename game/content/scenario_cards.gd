@@ -108,9 +108,11 @@ static func beat_met(ctx: ScoreContext, beat: Dictionary) -> bool:
 
 
 ## A Scenario for the show about to be chosen, from the tier of the current town.
-static func pick(run: RunState, r: ZRng) -> String:
+static func pick(run: RunState, r: ZRng, exclude := "") -> String:
 	var tier := 1 if run.town <= 3 else (2 if run.town <= 6 else 3)
-	var pool := ContentDB.pool("scenario", func(d: ContentDef) -> bool: return int(d.data["tier"]) == tier)
+	if run.scenario_tier() > 0:
+		tier = run.scenario_tier()
+	var pool := ContentDB.pool("scenario", func(d: ContentDef) -> bool: return int(d.data["tier"]) == tier and d.id != exclude)
 	if pool.is_empty():
 		return ""
 	return pool[r.below(pool.size())].id

@@ -10,7 +10,12 @@ extends Node
 ## playing a hand costs, and memory), shop, drag (a shop card dragged over its drop zone),
 ## end (a run given up), lost (beaten by the Patron), won, gallery1–gallery4 (every Jester,
 ## 40 to a page, at shop size), art1–art6 (the other painted cards; the cities on art5, court cards last), the tour (batch 12):
-## perform (a Scenario being performed, the crowd), encore, map, duo (a Lazzo tapped); and online, account, profile, leaderboards (these sign in to
+## perform (a Scenario being performed, the crowd), encore, map, duo (a Lazzo tapped); group 2
+## (batch 13): wagon, wardrobe, board (the Wagon's three tabs), campaign, between (How to
+## play, page 3), maestri (the collection with fame), maestro (Maestro and starred Jesters, the
+## Maestro tapped), bubble (a Patron speaking), rivals (the map with a nemesis, a rematch and a
+## painted wagon), chapter (a chapter cleared, choosing who to carry), nemesis (lost to a
+## Patron: it becomes the nemesis); and online, account, profile, leaderboards (these sign in to
 ## the local API first). URL settings for tools/perf.mjs: quality, crt, fps, fx, swirl,
 ## cardfx. Left out of the real "Web" export.
 
@@ -121,6 +126,21 @@ static func _backs(main: Control) -> void:
 		while v._face.texture == null:
 			await v.get_tree().process_frame
 	Settings.card_back = 0
+
+
+## A profile a few weeks in (batch 13): scudi, props, cosmetics worn, three chapters
+## cleared with a Jester carried, and fame (Zanni a Maestro, Arlecchino two stars,
+## Il Capitano one).
+static func _progress_profile() -> void:
+	var p := Game.profile
+	p.scudi = 340
+	p.props_owned = {"p_salvadanaio": true, "p_claque": true, "p_lanterna": true}
+	p.carried.assign(["p_claque"])
+	p.cosmetics = {"paint_azzurro": true, "trim_flags": true, "trim_lanterns": true, "cloth_viola": true, "back_corte": true}
+	p.worn = {"paint": "paint_azzurro", "trims": ["trim_flags", "trim_lanterns"]}
+	p.chapters_cleared = 3
+	p.carry = {"id": "z_colombina", "parts": []}
+	p.fame = {"z_zanni": 131, "z_arlecchino": 74, "z_capitano": 31, "z_isabella": 12}
 
 
 static func requested_screen() -> String:
@@ -270,6 +290,15 @@ static func open(main: Control, screen: String) -> void:
 	Settings.tutorial_step = 0 if screen.begins_with("coach") else -1
 	if screen == "menu":
 		return
+	if screen == "title":
+		main._show_title()
+		return
+	if screen == "menu_saved":
+		# The menu with a tour in progress and some progress made.
+		_progress_profile()
+		Game.new_run("d_venezia", 1)
+		main._show_menu()
+		return
 	if screen == "settings":
 		UiTheme.show_sheet(SettingsSheet.new())
 		return
@@ -318,6 +347,31 @@ static func open(main: Control, screen: String) -> void:
 	if screen.begins_with("art"):
 		_art(main, int(screen.substr(3)))
 		return
+	if screen in ["wagon", "wardrobe", "board", "campaign", "between", "maestri", "maestro", "rivals", "chapter"]:
+		_progress_profile()
+	match screen:
+		"wagon", "wardrobe", "board":
+			var wagon := WagonSheet.new()
+			wagon.tab = "props" if screen == "wagon" else screen
+			if screen == "wardrobe":
+				wagon.picked = "trim_awning"
+			UiTheme.show_sheet(wagon)
+			return
+		"campaign":
+			UiTheme.show_sheet(CampaignSheet.new(func(_c: String, _d: String) -> void: pass))
+			return
+		"between":
+			var help := HowToPlay.new()
+			help.page = 2
+			UiTheme.show_sheet(help)
+			return
+		"maestri":
+			for d in ContentDB.pool("zanni").slice(0, 40):
+				Game.profile.discovered[d.id] = true
+			UiTheme.show_sheet(CollectionSheet.new())
+			return
+		"rivals":
+			Game.profile.nemesis = {"patron": "pt_censore", "town": 2}
 	Game.new_run("d_bergamo", 1)
 	var run := Game.run
 	var n := 100
@@ -335,6 +389,31 @@ static func open(main: Control, screen: String) -> void:
 	var board: RunScreen = main.screens.get_child(main.screens.get_child_count() - 1)
 	if screen in ["help", "choose", "coach"]:
 		return
+	if screen == "rivals":
+		run.show_index = Shows.PATRON
+		run.phase = RunState.Phase.SHOP
+		run.shop = ShopState.new()
+		Game.act({"a": "leave_shop"})
+		# A rematch drawn for the same town shows its ribbon only when it isn't the nemesis's;
+		# here the map marks the nemesis, and the panel shows the city tapped.
+		Game.changed.emit()
+		return
+	if screen == "chapter":
+		Game.start_chapter("ch_04", "d_genova")
+		run = Game.run
+		for id in ["z_zanni", "z_arlecchino", "z_colombina", "z_lampionaio"]:
+			run.zanni.append(ItemCard.make(id, 3))
+		run.fame = {"z_zanni": 9, "z_arlecchino": 7, "z_colombina": 5}
+		run.counters["shows_won"] = 24
+		run.counters["encores"] = 3
+		run.won = true
+		run.town = 8
+		run.show_index = Shows.PATRON
+		run.phase = RunState.Phase.SHOP
+		run.shop = ShopState.new()
+		Game.win_seen = false
+		main._show_run()
+		return
 	if screen == "map":
 		run.show_index = Shows.PATRON
 		run.phase = RunState.Phase.SHOP
@@ -342,8 +421,28 @@ static func open(main: Control, screen: String) -> void:
 		Game.act({"a": "leave_shop"})
 		Game.changed.emit()
 		return
+	if screen == "bubble":
+		SpeechBubble.hold = true
+		run.show_index = Shows.PATRON
+		run.town_patron = "pt_gabelliere"
+	if screen == "nemesis":
+		run.show_index = Shows.PATRON
+		run.town = 3
+		run.town_patron = "pt_duca"
 	Game.act({"a": "select_show", "perform": screen == "perform"})
 	match screen:
+		"maestro":
+			board.selection = {"zone": "zanni", "index": 0}
+			board.refresh()
+			return
+		"bubble":
+			return
+		"nemesis":
+			run.show_score = 41200.0
+			run.phase = RunState.Phase.LOST
+			Game.finish_run()
+			board.refresh()
+			return
 		"encore":
 			run.show_target = 1.0
 			Game.act({"a": "play", "cards": [run.hand[0].id, run.hand[1].id]})

@@ -72,6 +72,10 @@ var sticker := ""
 var selected := false
 var dimmed := false
 var face_down := false
+## A Jester's fame (batch 13): its stars (0–2) in a corner, or the Maestro's gold laurel
+## frame and name.
+var maestro := false
+var stars := 0
 var price_text := ""
 ## Whatever the screen needs to know about this view when it's tapped.
 var tag: Dictionary = {}
@@ -148,8 +152,15 @@ func set_art(texture: Texture2D) -> void:
 func art_key() -> String:
 	if not face_down and kind == "card":
 		return playing_key(card, edition, size)
-	var face := "back%d" % Settings.card_back if face_down else "%s %s %s %s" % [kind, def_id, edition, sticker]
+	var face := "%s %s %s %s%s" % [kind, def_id, edition, sticker, " M" if maestro else (" *%d" % stars if stars > 0 else "")]
+	if face_down:
+		face = "back " + (worn_back() if worn_back() != "" else str(Settings.card_back))
 	return "%s @%dx%d q%d" % [face, size.x, size.y, Settings.quality]
+
+
+## The card back bought in the Wagon and worn, if any (it replaces the Settings design).
+static func worn_back() -> String:
+	return str(Game.profile.worn.get("back", ""))
 
 
 ## A face-up playing card's art key, without a view (CardArt draws faces ahead with it).
@@ -174,6 +185,8 @@ func baked_copy() -> CardView:
 	copy.edition = edition
 	copy.sticker = sticker
 	copy.face_down = face_down
+	copy.maestro = maestro
+	copy.stars = stars
 	copy.baking = true
 	# Paintings are shrunk a lot onto small cards: smooth, with mipmaps.
 	copy.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
@@ -355,9 +368,13 @@ func _gloss(r: Rect2) -> void:
 
 # --- backs and playing cards ---
 
-## The back the player picked in Settings (Settings.CARD_BACKS names them).
+## The back the player picked in Settings (Settings.CARD_BACKS names them), or one bought in
+## the Wagon and worn.
 func _draw_back(r: Rect2) -> void:
 	var body := _round_rect(r, 5.0)
+	if worn_back() != "":
+		_draw_cosmetic_back(r, body, worn_back())
+		return
 	var art := painting("back", str(Settings.card_back))
 	if art != null:
 		_draw_painting(body, r, art)
@@ -378,6 +395,65 @@ func _draw_back(r: Rect2) -> void:
 			_back_filigree(r, body, inner)
 		_:
 			_back_harlequin(r, body, inner)
+	_gloss(r)
+
+
+## A Wagon card back (batch 13): its painting once one exists (art/back/<id>), until then
+## its colour with a pattern of its own: masks, waves, chequers, lemons, stars, roses or the
+## court's crown.
+func _draw_cosmetic_back(r: Rect2, body: PackedVector2Array, id: String) -> void:
+	var art := painting("back", id)
+	if art != null:
+		_draw_painting(body, r, art)
+		_outline(body, UiTheme.GOLD.darkened(0.2), 1.4)
+		_gloss(r)
+		return
+	var c := WagonCards.cosmetic(id)
+	var colour: Color = c.get("colour", Color("3a1a40"))
+	_gradient(body, colour.lightened(0.12), colour.darkened(0.35))
+	var inner := r.grow(-maxf(3.0, r.size.x * 0.08))
+	var pane := _round_rect(inner, 3.0)
+	var ink := colour.lightened(0.45)
+	var s := r.size.x / 60.0
+	match id:
+		"back_scacchi":
+			var cell := inner.size.x / 6.0
+			for row in ceili(inner.size.y / cell):
+				for col in 6:
+					if (row + col) % 2 == 0:
+						var sq := Rect2(inner.position + Vector2(col, row) * cell, Vector2(cell, cell)).intersection(inner)
+						draw_rect(sq, Color(ink, 0.35))
+		"back_laguna":
+			for row in 7:
+				var y := inner.position.y + (row + 0.5) * inner.size.y / 7.0
+				var pts := PackedVector2Array()
+				for i in 13:
+					pts.append(Vector2(inner.position.x + i * inner.size.x / 12.0, y + sin(i * 1.3 + row) * 2.0 * s))
+				draw_polyline(pts, Color(ink, 0.5), 1.2 * s, true)
+		"back_stelle":
+			for i in 22:
+				_draw_star(_scatter(inner, i), (1.2 + (i % 3) * 0.8) * s, Color(UiTheme.GOLD, 0.7))
+		"back_limoni":
+			for i in 9:
+				var at := _scatter(inner, i * 3)
+				draw_set_transform(at, 0.6, Vector2(1.0, 0.7))
+				_dot(Vector2.ZERO, 4.0 * s, Color("f2d43a"))
+				draw_set_transform(Vector2.ZERO)
+				_leaf(at + Vector2(2, -2) * s, at + Vector2(7, -6) * s, 3.0 * s, Color("3f8a3a"))
+		"back_rose":
+			for i in 8:
+				var at := _scatter(inner, i * 5 + 2)
+				for k in 5:
+					_dot(at + Vector2(cos(k * TAU / 5.0), sin(k * TAU / 5.0)) * 2.4 * s, 2.2 * s, Color("d4506a"))
+				_dot(at, 1.6 * s, Color("f0c0c8"))
+		"back_corte":
+			_draw_crown(inner.get_center() + Vector2(0, inner.size.y * 0.12), inner.size.x * 0.55, UiTheme.GOLD, 0.62)
+		_:
+			# Masks: a small bauta repeated.
+			for i in 6:
+				_draw_mask(_scatter(inner, i * 4 + 1), 10.0 * s)
+	_outline(pane, UiTheme.GOLD.darkened(0.15), 1.0)
+	_outline(body, UiTheme.GOLD.darkened(0.2), 1.4)
 	_gloss(r)
 
 
@@ -678,6 +754,7 @@ func _draw_named(r: Rect2) -> void:
 	_draw_ribbon(r, window.end.y + 4, colour)
 	if sticker != "":
 		draw_string(UiTheme.title_font, Vector2(7, 13), sticker.left(1).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, UiTheme.GOLD)
+	_draw_fame(r)
 	_gloss(r)
 
 
@@ -750,25 +827,51 @@ func _draw_painted(r: Rect2, tex: Texture2D, colour: Color, rarity: int, gems: b
 	if sticker != "":
 		draw_string_outline(UiTheme.title_font, Vector2(6, 14), sticker.left(1).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, 3, Color(0, 0, 0, 0.8))
 		draw_string(UiTheme.title_font, Vector2(6, 14), sticker.left(1).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, UiTheme.GOLD)
+	_draw_fame(r)
 	_gloss(r)
 
 
-## The card's name in white at the bottom of a painting (shrinking to fit two lines).
+## Fame (batch 13): a Maestro's gold double frame with laurel sprigs in the lower corners;
+## below Maestro, a star per star earned in the top-right corner.
+func _draw_fame(r: Rect2) -> void:
+	var k := r.size.x / 60.0
+	if maestro:
+		_outline(_round_rect(r.grow(-0.8), 4.8), UiTheme.GOLD, 2.2)
+		_outline(_round_rect(r.grow(-3.4), 3.4), UiTheme.GOLD.lightened(0.3), 0.9)
+		for side in [-1.0, 1.0]:
+			var root := Vector2(r.size.x / 2.0 + side * r.size.x * 0.43, r.size.y * 0.97)
+			for i in 4:
+				var t := float(i) / 4.0
+				var at := root + Vector2(-side * r.size.x * 0.06 * t, -r.size.y * (0.06 + 0.2 * t))
+				_leaf(at, at + Vector2(side * 4.5, -3.0) * k, 2.4 * k, Color("e0b84a"))
+				_leaf(at, at + Vector2(-side * 3.5, -4.0) * k, 2.2 * k, Color("c8962a"))
+	for i in (3 if maestro else stars):
+		var at := Vector2(r.size.x - (6.0 + i * 7.0) * k, 7.0 * k)
+		_draw_star(at, 3.2 * k, Color(0, 0, 0, 0.6))
+		_draw_star(at, 2.5 * k, UiTheme.GOLD.lightened(0.2))
+
+
+## The card's name in white at the bottom of a painting (shrinking to fit two lines); a
+## Maestro's title instead of its name.
 func _draw_name(r: Rect2) -> void:
 	var title := UiTheme.name_of(def_id) if def_id != "" else ""
+	if maestro and kind == "zanni":
+		title = Fame.title(def_id, title)
 	var k := r.size.x / 60.0
 	var base := maxi(6, roundi(8.5 * k))
+	# Inside a Maestro's double gold frame there's less room.
+	var room := r.size.x - (14.0 * k if maestro else 6.0)
 	# One line if a slightly smaller size fits it ("Il Funambolo" read as "Il / Funambolo").
 	var font_size := base
 	var lines := [title]
-	while font_size > roundi(base * 0.8) and _widest(lines, font_size) > r.size.x - 6:
+	while font_size > roundi(base * 0.8) and _widest(lines, font_size) > room:
 		font_size -= 1
-	if _widest(lines, font_size) > r.size.x - 6:
+	if _widest(lines, font_size) > room:
 		font_size = base
-		lines = _wrap(title, r.size.x - 8, font_size)
-		while font_size > 5 and (lines.size() > 2 or _widest(lines, font_size) > r.size.x - 6):
+		lines = _wrap(title, room - 2.0, font_size)
+		while font_size > 5 and (lines.size() > 2 or _widest(lines, font_size) > room):
 			font_size -= 1
-			lines = _wrap(title, r.size.x - 8, font_size)
+			lines = _wrap(title, room - 2.0, font_size)
 	lines = lines.slice(0, 2)
 	var line_h := font_size * 1.05
 	var y := r.size.y - 5.0 * k - (lines.size() - 1) * line_h
@@ -859,6 +962,8 @@ func _draw_frame_marks(r: Rect2, window: Rect2, pane: PackedVector2Array, colour
 ## The card's name on a notched ribbon under the picture (up to three lines).
 func _draw_ribbon(r: Rect2, top: float, colour: Color) -> void:
 	var title := UiTheme.name_of(def_id) if def_id != "" else ""
+	if maestro and kind == "zanni":
+		title = Fame.title(def_id, title)
 	# Long names shrink until they fit in two lines ("Il Venditore di Almanacchi").
 	var font_size := 8
 	var lines := _wrap(title, r.size.x - 10, font_size)

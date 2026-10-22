@@ -28,3 +28,5 @@ static func register_all() -> void:
 	ScenarioCards.register()   # batch 12
 	CityCards.register()       # batch 12
 	LazziCards.register()      # batch 12
+	WagonCards.register()      # batch 13
+	CampaignCards.register()   # batch 13

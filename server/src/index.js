@@ -364,8 +364,11 @@ async function submitRun(request, env) {
     }
     dailyDate = date;
   }
-  const result = await env.DB.prepare('INSERT INTO runs (user_id, seed, deck, stake, challenge, daily_date, won, town, best_hand, jesters, actions, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-    .bind(user.id, seed, deck, stake, challenge, dailyDate, data.won ? 1 : 0, town, bestHand, JSON.stringify(jesters), JSON.stringify(actions), now()).run();
+  // Helped by Maestri, wagon props or the campaign: kept off the leaderboards. A daily run
+  // never is (the game brings no help to it).
+  const assisted = data.assisted && !dailyDate ? 1 : 0;
+  const result = await env.DB.prepare('INSERT INTO runs (user_id, seed, deck, stake, challenge, daily_date, won, town, best_hand, jesters, actions, created_at, assisted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(user.id, seed, deck, stake, challenge, dailyDate, data.won ? 1 : 0, town, bestHand, JSON.stringify(jesters), JSON.stringify(actions), now(), assisted).run();
   const runId = result.meta.last_row_id;
   if (dailyDate) await env.DB.prepare('UPDATE daily SET run_id = ? WHERE date = ? AND user_id = ?').bind(runId, dailyDate, user.id).run();
   return json({ run_id: runId, daily_date: dailyDate }, 201);
@@ -397,7 +400,7 @@ async function dailyBoard(request, env, url) {
 
 async function bestHandBoard(request, env) {
   const user = await sessionUser(env.DB, request);
-  const best = 'SELECT r.user_id, u.name, MAX(r.best_hand) AS best_hand FROM runs r JOIN users u ON u.id = r.user_id GROUP BY r.user_id';
+  const best = 'SELECT r.user_id, u.name, MAX(r.best_hand) AS best_hand FROM runs r JOIN users u ON u.id = r.user_id WHERE r.assisted = 0 GROUP BY r.user_id';
   return board(env, user, `${best} ORDER BY best_hand DESC`, [], async (u) => {
     const mine = await env.DB.prepare(`SELECT * FROM (${best}) WHERE user_id = ?`).bind(u.id).first();
     if (!mine) return null;
@@ -410,7 +413,7 @@ async function townBoard(request, env, url) {
   const user = await sessionUser(env.DB, request);
   const stake = Number(url.searchParams.get('stake') || 1);
   if (!Number.isInteger(stake) || stake < 1 || stake > 8) throw new HttpError(400, 'Stakes go from 1 to 8.');
-  const best = "SELECT r.user_id, u.name, MAX(r.town) AS town FROM runs r JOIN users u ON u.id = r.user_id WHERE r.stake = ? AND r.challenge = '' GROUP BY r.user_id";
+  const best = "SELECT r.user_id, u.name, MAX(r.town) AS town FROM runs r JOIN users u ON u.id = r.user_id WHERE r.stake = ? AND r.challenge = '' AND r.assisted = 0 GROUP BY r.user_id";
   return board(env, user, `${best} ORDER BY town DESC`, [stake], async (u) => {
     const mine = await env.DB.prepare(`SELECT * FROM (${best}) WHERE user_id = ?`).bind(stake, u.id).first();
     if (!mine) return null;

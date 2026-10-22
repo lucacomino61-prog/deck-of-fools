@@ -36,6 +36,8 @@ http://localhost:8787/v1/dev/outbox; the confirm and reset links in them work.
 - Runs can't be replayed on the server (the rules live in the game), so a run is checked for
   plausibility against its action log and kept for later checks. Treat the boards as honest
   play until a server-side replay exists.
+- A run the game marks `assisted` (Maestri, wagon props or the campaign helped; batch 13)
+  counts in the player's stats but stays off the best-hand and town boards (migration 0002).
 
 ## Before it goes live (needs Luca's go-ahead)
 

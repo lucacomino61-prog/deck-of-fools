@@ -1,8 +1,10 @@
 class_name MapView
 extends Control
 ## The Map of Italy (batch 12), drawn from a simplified coastline: the route's roads, the
-## cities visited (gold), where the troupe is (a ring), and the cities a road leads to next
-## (glowing, tappable). Tapping one emits city_tapped with its column in the next row.
+## cities visited (gold), where the troupe is (a ring, with its wagon beside it, batch 13),
+## and the cities a road leads to next (glowing, tappable). A city where a rematch waits
+## wears a red ribbon, the nemesis a black seal, a campaign chapter's Patron a gold crown.
+## Tapping one emits city_tapped with its column in the next row.
 
 signal city_tapped(col: int)
 
@@ -46,6 +48,9 @@ var _pulse := 0.0
 ## held here so they live as long as the map draws them.
 var _land: Texture2D
 var _sea: Texture2D
+## The wagon on its way to another city (roll_wagon): where it's heading and how far.
+var _roll_to := ""
+var _roll := 0.0
 
 
 func _init(for_run: RunState) -> void:
@@ -68,6 +73,16 @@ func _ready() -> void:
 func _set_pulse(v: float) -> void:
 	_pulse = v
 	queue_redraw()
+
+
+## Rolls the troupe's wagon along the road to `dest` (about 1.2 s); returns when it's there.
+func roll_wagon(dest: String) -> void:
+	_roll_to = dest
+	var t := create_tween()
+	t.tween_method(func(v: float) -> void:
+		_roll = v
+		queue_redraw(), 0.0, 1.0, 1.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	await t.finished
 
 
 func _fit() -> void:
@@ -169,8 +184,17 @@ func _draw() -> void:
 				radius = 3.6
 			draw_circle(p, radius + 1.0, Color("2a1a10"))
 			draw_circle(p, radius, colour)
+			if row == run.route_row + 1:
+				_draw_grudge(p, row, col)
 			if here or next or visited or row == run.route.size() - 1:
 				labels.append([0 if here else (1 if next else 2), city_id, p, here or next])
+	# The troupe's wagon beside its city, or rolling along the road to the next.
+	var from := city_point(run.city)
+	var wagon_at := from
+	if _roll_to != "":
+		wagon_at = from.lerp(city_point(_roll_to), _roll) + Vector2(0, -sin(_roll * PI * 6.0) * 0.8)
+	var k := clampf(_scale / 45.0, 0.3, 0.6)
+	WagonArt.draw(self, wagon_at + Vector2(-14, 2) * k, k, WagonArt.worn_paint(), WagonArt.worn_trims(), _roll * 12.0)
 	labels.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
 	var font := UiTheme.title_font
 	var placed: Array[Rect2] = []
@@ -191,6 +215,25 @@ func _draw() -> void:
 		placed.append(Rect2(at - Vector2(0, text.y * 0.8), text))
 		draw_string_outline(font, at, name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 3, Color(0, 0, 0, 0.85))
 		draw_string(font, at, name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color("fff2d6") if bright else Color("e8d6ae"))
+
+
+## A mark over a city of the next row where a Patron is already waiting (batch 13): the
+## nemesis's black seal, a rematch's red ribbon, a chapter's story Patron's gold crown.
+func _draw_grudge(p: Vector2, row: int, col: int) -> void:
+	var waiting := run.patron_waiting(row, col)
+	if waiting == "":
+		return
+	var at := p + Vector2(0, -10)
+	if run.town == run.nemesis_town() and waiting == run.nemesis_patron():
+		draw_circle(at, 4.2, Color("1a1014"))
+		draw_arc(at, 4.2, 0, TAU, 16, Color("c0a060"), 0.8, true)
+		draw_line(at + Vector2(-2, -2), at + Vector2(2, 2), Color("c0a060"), 0.9, true)
+		draw_line(at + Vector2(2, -2), at + Vector2(-2, 2), Color("c0a060"), 0.9, true)
+	elif int(run.rematch.get("town", -1)) == run.town:
+		draw_colored_polygon(PackedVector2Array([at + Vector2(-4, -3), at + Vector2(4, -3), at + Vector2(4, 2), at + Vector2(0, 0), at + Vector2(-4, 2)]), Color("c8283a"))
+	elif run.chapter != "" and run.town == Shows.FINAL_TOWN:
+		draw_colored_polygon(PackedVector2Array([at + Vector2(-4, 2), at + Vector2(-4, -2), at + Vector2(-2, 0), at + Vector2(0, -4),
+			at + Vector2(2, 0), at + Vector2(4, -2), at + Vector2(4, 2)]), UiTheme.GOLD)
 
 
 ## Whether the troupe's road went through this city (rows behind it).

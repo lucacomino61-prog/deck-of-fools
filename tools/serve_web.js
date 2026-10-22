@@ -1,8 +1,11 @@
 // Serves the web export (build/web) for previews: node tools/serve_web.js [port]
 // /preview/ serves build/web-preview, the build that opens one screen from ?screen=
 // (tools/export_web.ps1 makes both). Sends the cross-origin isolation headers Godot's
-// threaded builds need.
+// threaded builds need. With a certificate from tools/phone_cert.ps1 it also serves HTTPS on
+// port + 1, for a phone on the same network.
 const http = require('http');
+const https = require('https');
+const os = require('os');
 const fs = require('fs');
 const path = require('path');
 
@@ -14,6 +17,7 @@ const port = Number(process.argv[2] || process.env.PORT || 3790);
 const types = {
   '.html': 'text/html', '.js': 'text/javascript', '.wasm': 'application/wasm',
   '.pck': 'application/octet-stream', '.png': 'image/png', '.svg': 'image/svg+xml', '.wav': 'audio/wav',
+  '.webp': 'image/webp', '.woff2': 'font/woff2',
 };
 
 if (!fs.existsSync(path.join(root, 'index.html'))) {
@@ -21,7 +25,7 @@ if (!fs.existsSync(path.join(root, 'index.html'))) {
   process.exit(1);
 }
 
-http.createServer((req, res) => {
+const serve = (req, res) => {
   let name = decodeURIComponent(req.url.split('?')[0]);
   let base = root;
   if (name.startsWith('/preview/')) {
@@ -53,4 +57,17 @@ http.createServer((req, res) => {
     'Cache-Control': 'no-store',
   });
   fs.createReadStream(file).pipe(res);
-}).listen(port, () => console.log(`Deck of Fools web build on http://localhost:${port}`));
+};
+
+http.createServer(serve).listen(port, () => console.log(`Deck of Fools web build on http://localhost:${port}`));
+
+// Godot's web build only starts in a secure context: localhost is one, but a phone reaches this
+// computer by its network address, which needs HTTPS.
+const certDir = path.join(__dirname, '..', 'build', 'cert');
+if (fs.existsSync(path.join(certDir, 'cert.pem'))) {
+  const tls = { key: fs.readFileSync(path.join(certDir, 'key.pem')), cert: fs.readFileSync(path.join(certDir, 'cert.pem')) };
+  const addresses = Object.values(os.networkInterfaces()).flat().filter((a) => a.family === 'IPv4' && !a.internal);
+  https.createServer(tls, serve).listen(port + 1, () => {
+    for (const a of addresses) console.log(`On a phone on the same network: https://${a.address}:${port + 1}`);
+  });
+}

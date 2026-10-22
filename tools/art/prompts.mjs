@@ -369,6 +369,24 @@ const MAP_TEXTURES = {
   sea: 'seen from directly above, a painted antique sea, deep blue and teal waves in fine curling brushstrokes, '
     + 'soft gold light, even across the whole picture',
 };
+// Batch 13's art (progression): Messer Grifone's Patron card and the Wagon's seven card backs.
+// The wagon itself is drawn in code, so a bought paint can recolour it.
+const CAMPAIGN_PATRONS = {
+  pt_grifone: 'Messer Grifone, a rich and sly Renaissance impresario in a dark green velvet cloak lined with gold, '
+    + 'a golden griffin brooch, rings on every finger, a heavy purse of gold coins in one hand, a thin smile, '
+    + 'waist-up portrait, imposing, lit by stage lights from below',
+};
+const WAGON_BACKS = {
+  back_maschere: 'a symmetrical pattern of small Venetian carnival masks on deep crimson',
+  back_laguna: 'symmetrical stylised waves of the Venetian lagoon in teal and gold',
+  back_scacchi: 'a flat black and ivory chequerboard pattern with a gold rosette in the centre',
+  back_limoni: 'a symmetrical pattern of yellow lemons and green leaves on deep blue',
+  back_stelle: 'a symmetrical field of small golden stars on deep midnight blue',
+  back_rose: 'a symmetrical pattern of red roses and thorny stems on dusky pink',
+  back_corte: 'a golden royal crown above two rampant golden lions on purple velvet',
+};
+const WAGON_BACK_STYLE = 'Back design of a luxury playing card, perfectly symmetrical and ornamental, an ornate gold border, '
+  + 'painted in rich detail, filling the whole picture edge to edge, vibrant jewel colours.';
 const BOX_STYLE = 'Painterly digital illustration for a luxury fantasy card game, Venetian Renaissance theatre, '
   + 'rich brushwork, fine detail, warm golden light, vibrant jewel colours, tall portrait composition.';
 const TEXTURE_STYLE = 'Painterly texture for the map of a luxury fantasy card game, rich brushwork, subtle and calm.';
@@ -381,14 +399,22 @@ export function freeBriefs() {
   for (const [id, view] of Object.entries(CITIES)) out[`city/${id}`] = `${view}. ${CITY_STYLE}`;
   for (const [id, scene] of Object.entries(BOXES)) out[`box/${id}`] = `${scene}. ${BOX_STYLE}`;
   for (const [id, look] of Object.entries(MAP_TEXTURES)) out[`map/${id}`] = `${look}. ${TEXTURE_STYLE}`;
+  for (const [id, who] of Object.entries(CAMPAIGN_PATRONS)) out[`patron/${id}`] = `${who}. ${FREE_STYLE}`;
+  for (const [id, design] of Object.entries(WAGON_BACKS)) out[`back/${id}`] = `${design}. ${WAGON_BACK_STYLE}`;
   return out;
 }
 
-/** The keys of batch 12's art (cities, boxes, map), for free.mjs --only. */
+/** The keys of batch 12's art (cities, boxes, map), for free.mjs --tour. */
 export const TOUR_ART = [
   ...Object.keys(CITIES).map((id) => `city/${id}`),
   ...Object.keys(BOXES).map((id) => `box/${id}`),
   ...Object.keys(MAP_TEXTURES).map((id) => `map/${id}`),
+];
+
+/** The keys of batch 13's art (Grifone, the Wagon's card backs), for free.mjs --progression. */
+export const PROGRESSION_ART = [
+  ...Object.keys(CAMPAIGN_PATRONS).map((id) => `patron/${id}`),
+  ...Object.keys(WAGON_BACKS).map((id) => `back/${id}`),
 ];
 
 export function allBriefs() {

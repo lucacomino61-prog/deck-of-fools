@@ -113,6 +113,12 @@ var jester_views: Array = []
 ## The two theatre boxes beside the table on tour (batch 12); they stay across refreshes so
 ## their reactions can play out.
 var boxes: Array[TheatreBox] = []
+## The Map of Italy while it's on the table (the wagon rolls on it before a travel).
+var _map: MapView
+## Patron lines already spoken this run ("town:kind"), so each is said once.
+var _said: Dictionary = {}
+## The Jester picked to carry into the next campaign chapter (its seat).
+var _carry_pick := 0
 const BOX_SIZE := Vector2(60, 100)
 
 
@@ -231,7 +237,9 @@ func _area(pos: Vector2, area_size: Vector2) -> Control:
 	var c := Control.new()
 	c.position = pos
 	c.size = area_size
-	c.mouse_filter = Control.MOUSE_FILTER_PASS
+	# Its cards take taps themselves; the area doesn't, so a card reaching into the next area
+	# (the Market's big cards reach into the hand's) is tappable all over.
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	stage.add_child(c)
 	return c
 
@@ -362,6 +370,7 @@ func refresh() -> void:
 	_build_tip()
 	_build_coach()
 	_build_overlay()
+	_patron_speaks()
 	# The next cards to be dealt (they come off the end of the draw pile), drawn ahead so a
 	# refill doesn't stall on drawing their faces.
 	if run.phase == RunState.Phase.IN_SHOW:
@@ -541,6 +550,8 @@ func _update_info() -> void:
 	if not selection.is_empty():
 		var id := _selected_def_id()
 		info_name.text = UiTheme.name_of(id) if id != "" else ""
+		if id != "" and run.maestri.has(id) and ContentDB.get_def(id) != null and ContentDB.get_def(id).kind == "zanni":
+			info_name.text = Fame.title(id, info_name.text)
 		info_text.text = _describe_selection(id)
 	elif selected_hand.size() == 1:
 		var card := _hand_card(selected_hand[0])
@@ -587,6 +598,7 @@ func _build_top() -> void:
 	for i in r.zanni.size():
 		var z := r.zanni[i]
 		var v := _named_view(z.def().kind if z.def() != null else "zanni", z.def_id, jester_card, {"zone": "zanni", "index": i})
+		_fame_look(v, z)
 		v.edition = z.edition
 		v.dimmed = z.debuffed
 		v.face_down = z.face_down
@@ -657,11 +669,15 @@ func _build_tip() -> void:
 	big.def_id = def.id
 	big.edition = item.edition
 	big.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fame_look(big, item)
 	row.add_child(big)
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 3)
 	row.add_child(col)
-	col.add_child(UiTheme.title(UiTheme.name_of(def.id), 13, UiTheme.GOLD))
+	var title := UiTheme.name_of(def.id)
+	if big.maestro and def.kind == "zanni":
+		title = Fame.title(def.id, title)
+	col.add_child(UiTheme.title(title, 13, UiTheme.GOLD))
 	var what: String = KIND_HELP.get(def.kind, "").get_slice(":", 0)
 	if def.kind == "zanni":
 		what = CardView.RARITY_NAMES[clampi(def.rarity, 0, 3)] + " " + what
@@ -692,7 +708,19 @@ func _named_view(kind: String, def_id: String, view_size: Vector2, tag: Dictiona
 	v.selected = _same(selection, tag)
 	v.tapped.connect(_on_tap)
 	v.long_pressed.connect(_show_detail)
+	_fame_look(v)
 	return v
+
+
+## A Jester's fame on its card (batch 13): the Maestro's frame when it plays as one in this
+## run, otherwise the stars the player's profile gave it. A duo wears the frame when both its
+## Jesters are Maestri.
+func _fame_look(v: CardView, item: ItemCard = null) -> void:
+	if v.kind == "zanni":
+		v.maestro = run.maestri.has(v.def_id)
+		v.stars = mini(Fame.stars(Game.profile.fame_of(v.def_id)), 3)
+	elif v.kind == "lazzo" and item != null and not item.parts.is_empty():
+		v.maestro = item.parts.all(func(p: ItemCard) -> bool: return run.maestri.has(p.def_id))
 
 
 # --- drag to act (as Balatro does on phones) ---
@@ -831,6 +859,30 @@ func _build_middle() -> void:
 
 # --- the tour (batch 12): the crowd, Scenarios, the Encore, the map ---
 
+## Patron rivalry (batch 13): a Patron speaks once as its show starts (its revenge line when
+## it's a rematch or your nemesis) and once when you beat it. Its gloat is on the end screen.
+func _patron_speaks() -> void:
+	if run.show_index != Shows.PATRON or run.town_patron == "":
+		return
+	var kind := ""
+	if run.phase == RunState.Phase.IN_SHOW and int(run.show_counters.get("hands_played", 0)) == 0:
+		kind = "revenge" if run.is_rematch() or run.is_nemesis() else "enter"
+	elif run.phase == RunState.Phase.CASH_OUT or (run.phase == RunState.Phase.ENCORE and run.show_counters.get("encore", "") == "offered"):
+		kind = "beaten"
+	if kind == "":
+		return
+	var key := "%s %d %d %s" % [run.seed_text, run.town, run.route_row, "beaten" if kind == "beaten" else "enter"]
+	if _said.has(key):
+		return
+	_said[key] = true
+	var line := TranslationServer.translate("%s.%s" % [run.town_patron, kind])
+	if line == "%s.%s" % [run.town_patron, kind]:
+		return
+	var bubble := SpeechBubble.new(UiTheme.name_of(run.town_patron), line)
+	stage.add_child(bubble)
+	bubble.place(Vector2(AREA_X + area_w / 2.0, 92), area_w * 0.7)
+
+
 ## The theatre boxes show during a show and its Encore on tour, with the crowd's mood.
 func _update_boxes() -> void:
 	var show_time := run.phase == RunState.Phase.IN_SHOW or run.phase == RunState.Phase.ENCORE
@@ -918,6 +970,7 @@ func _middle_encore() -> void:
 func _middle_map() -> void:
 	var map_w := minf(250.0, area_w * 0.52)
 	var map := MapView.new(run)
+	_map = map
 	map.position = Vector2(0, 0)
 	map.size = Vector2(map_w, 236)
 	var roads := run.roads()
@@ -963,6 +1016,18 @@ func _middle_map() -> void:
 	var options: Array = ContentDB.get_def(city_id).data.get("options", [])
 	if not options.is_empty():
 		info.add_child(_wrapped("You'll choose on arrival: " + " or ".join(options) + ".", 9, w))
+	var waiting := run.patron_waiting(run.route_row + 1, col)
+	if waiting != "":
+		var why := "Patron here: %s." % UiTheme.name_of(waiting)
+		if run.town == run.nemesis_town() and waiting == run.nemesis_patron():
+			why = "Your nemesis waits here: %s. Beat it for +%d ducats." % [UiTheme.name_of(waiting), RunState.NEMESIS_DUCATS]
+		elif int(run.rematch.get("town", -1)) == run.town:
+			why = "%s wants a rematch: target x1.25, pays double." % UiTheme.name_of(waiting)
+		elif run.chapter != "" and run.town == Shows.FINAL_TOWN:
+			why = "The chapter's Patron waits here: %s." % UiTheme.name_of(waiting)
+		var l := _wrapped(why, 9, w)
+		l.add_theme_color_override("font_color", UiTheme.MULT.lightened(0.3))
+		info.add_child(l)
 	if roads.size() > 1:
 		info.add_child(_wrapped("Tap another glowing city to compare.", 8, w))
 
@@ -993,6 +1058,15 @@ func _middle_shows() -> void:
 			col.add_child(_wrapped(UiTheme.name_of(r.town_patron), 10, w - 14.0))
 			col.get_child(col.get_child_count() - 1).add_theme_color_override("font_color", UiTheme.MULT.lightened(0.2))
 			col.add_child(_wrapped(UiTheme.text_of(r.town_patron), 8, w - 14.0))
+			var grudge := ""
+			if r.is_nemesis():
+				grudge = "Your nemesis! Beat it: +%d ducats" % RunState.NEMESIS_DUCATS
+			elif r.is_rematch():
+				grudge = "Back for a rematch: x1.25 target, double pay"
+			if grudge != "":
+				var l := _wrapped(grudge, 8, w - 14.0)
+				l.add_theme_color_override("font_color", UiTheme.GOLD)
+				col.add_child(l)
 		middle.add_child(panel)
 
 
@@ -1159,6 +1233,10 @@ func _jester_lines(index: int) -> Array:
 		lines.append("On the picked cards: " + _effect_text(shares[index]))
 	for m in LazziCards.merges_for(run, index):
 		lines.append("With %s: merge into %s (in the Market)" % [UiTheme.name_of(run.zanni[int(m["other"])].def_id), UiTheme.name_of(m["duo"])])
+	if run.is_maestro(z):
+		lines.append("Maestro: +%d ducats at each cash-out" % Fame.FLAT_DUCATS if Fame.FLAT.has(z.def_id) else "Maestro: its numbers are x1.25")
+	elif z.parts.is_empty() and z.def() != null and z.def().kind == "zanni":
+		lines.append(_fame_line(z.def_id))
 	if not z.state.get("eternal", false):
 		lines.append("Sells for %d ducats" % (z.sell_value() * run.stat("sell_pct") / 100))
 	return lines
@@ -1193,6 +1271,8 @@ func _payout_name(src: String) -> String:
 			return "The crowd walked out"
 		"encore":
 			return "Encore! (x2)"
+		"nemesis":
+			return "Vendetta! Your nemesis beaten"
 	if src.begins_with("zanni:"):
 		return UiTheme.name_of(src.get_slice(":", 1).get_slice("#", 0))
 	if src.begins_with("card:"):
@@ -1200,8 +1280,18 @@ func _payout_name(src: String) -> String:
 	return src
 
 
-## The shop fills the table (there's no hand to show): a framed market with the cards on
-## top and the packs and Warrants below, all at full card size.
+## A Jester's fame in words: "Fame 32: 2 stars, 28 to the next".
+static func _fame_line(def_id: String) -> String:
+	var fame := Game.profile.fame_of(def_id)
+	var stars := Fame.stars(fame)
+	if stars >= 3:
+		return "Fame %d: a Maestro (in normal runs and the campaign)" % fame
+	return "Fame %d: %d star%s, %d to the next (Maestro at %d)" % [fame, stars, "" if stars == 1 else "s", Fame.to_next(fame), Fame.MAESTRO]
+
+
+## The shop fills the table (there's no hand to show): a framed market. Cards, packs and
+## Warrants stand in one row, as big as the table's width allows; with too much on sale for
+## that, cards on top and packs and Warrants below, at the usual size.
 func _middle_shop() -> void:
 	var r := run
 	var panel := Panel.new()
@@ -1213,59 +1303,103 @@ func _middle_shop() -> void:
 	heading.position = Vector2(0, 4)
 	heading.size = Vector2(area_w, 24)
 	middle.add_child(heading)
+
+	# What's on sale, in its three groups: [label, [maker(size) -> CardView]].
+	var cards: Array[Callable] = []
+	for i in r.shop.offers.size():
+		if not r.shop.offers[i]["sold"]:
+			cards.append(_offer_maker(i))
+	var packs: Array[Callable] = []
+	for i in r.shop.packs.size():
+		if not r.shop.packs[i]["sold"]:
+			packs.append(_pack_maker(i))
+	var warrants: Array[Callable] = []
+	for w in [[r.town_warrant, r.warrant_bought, 0], [r.shop.extra_warrant, r.shop.extra_bought, 1]]:
+		if w[0] != "" and not w[1]:
+			warrants.append(_warrant_maker(str(w[0]), int(w[2])))
+	var groups := [["Cards", cards], ["Packs", packs], ["Warrant", warrants]].filter(func(g: Array) -> bool: return not (g[1] as Array).is_empty())
+	var count := cards.size() + packs.size() + warrants.size()
+	const GAP := 10.0
+	const GROUP_GAP := 24.0
+	var each := (area_w - 28.0 - (count - groups.size()) * GAP - (groups.size() - 1) * GROUP_GAP) / maxf(1.0, count)
+	if each >= SHOP_CARD.x + 6.0:
+		var card_size := Vector2(floorf(minf(each, 96.0)), 0)
+		card_size.y = floorf(card_size.x * 1.4)
+		var at_x := 14.0
+		# The row sits in the middle of the table under the heading.
+		var at_y := floorf((236.0 - card_size.y) / 2.0) + 14.0
+		for g in groups:
+			middle.add_child(_section(g[0], at_x, at_y - 18.0))
+			for make: Callable in g[1]:
+				var v: CardView = make.call(card_size)
+				v.position = Vector2(at_x, at_y)
+				middle.add_child(v)
+				at_x += card_size.x + GAP
+			at_x += GROUP_GAP - GAP
+		return
 	middle.add_child(_section("Cards", 14, 28))
 	var x := 14.0
-	for i in r.shop.offers.size():
-		var o: Dictionary = r.shop.offers[i]
-		if o["sold"]:
-			continue
+	for make in cards:
+		var v: CardView = make.call(SHOP_CARD)
+		v.position = Vector2(x, 42)
+		middle.add_child(v)
+		x += 70
+	middle.add_child(_section("Packs", 14, 132))
+	x = 14.0
+	for make in packs:
+		var v: CardView = make.call(SHOP_CARD)
+		v.position = Vector2(x, 146)
+		middle.add_child(v)
+		x += 70
+	x = maxf(x + 24, 200)
+	if not warrants.is_empty():
+		middle.add_child(_section("Warrant", x, 132))
+	for make in warrants:
+		var v: CardView = make.call(SHOP_CARD)
+		v.position = Vector2(x, 146)
+		middle.add_child(v)
+		x += 70
+
+
+## A shop card offer, its price and its drop-to-buy, at the size given.
+func _offer_maker(i: int) -> Callable:
+	return func(at_size: Vector2) -> CardView:
+		var o: Dictionary = run.shop.offers[i]
 		var v: CardView
 		if o["kind"] == "card":
-			v = CardView.new(SHOP_CARD)
+			v = CardView.new(at_size)
 			v.card = _card_from(o["card"])
 			v.tag = {"zone": "offer", "index": i}
 			v.selected = _same(selection, v.tag)
 			v.tapped.connect(_on_tap)
 			v.long_pressed.connect(_show_detail)
 		else:
-			v = _named_view(o["kind"], o["id"], SHOP_CARD, {"zone": "offer", "index": i})
+			v = _named_view(o["kind"], o["id"], at_size, {"zone": "offer", "index": i})
 			v.edition = o["edition"]
 			v.sticker = str(o.get("sticker", "rented" if o.get("rented", false) else ""))
-		v.price_text = str(r.offer_price(o))
-		v.position = Vector2(x, 42)
+		v.price_text = str(run.offer_price(o))
 		v.sway = i
-		var slot := i
-		_droppable(v, "top", "Drop to buy for %d" % r.offer_price(o), func() -> void: _act({"a": "buy", "slot": slot}))
-		middle.add_child(v)
-		x += 70
-	middle.add_child(_section("Packs", 14, 132))
-	x = 14.0
-	for i in r.shop.packs.size():
-		var p: Dictionary = r.shop.packs[i]
-		if p["sold"]:
-			continue
-		var v := _named_view("pack", p["id"], SHOP_CARD, {"zone": "pack", "index": i})
-		v.price_text = str(r.offer_price(p))
-		v.position = Vector2(x, 146)
+		_droppable(v, "top", "Drop to buy for %d" % run.offer_price(o), func() -> void: _act({"a": "buy", "slot": i}))
+		return v
+
+
+func _pack_maker(i: int) -> Callable:
+	return func(at_size: Vector2) -> CardView:
+		var p: Dictionary = run.shop.packs[i]
+		var v := _named_view("pack", p["id"], at_size, {"zone": "pack", "index": i})
+		v.price_text = str(run.offer_price(p))
 		v.sway = i + 4
-		var pack_slot := i
-		_droppable(v, "top", "Drop to buy and open for %d" % r.offer_price(p), func() -> void: _act({"a": "buy_pack", "slot": pack_slot}))
-		middle.add_child(v)
-		x += 70
-	x = maxf(x + 24, 200)
-	middle.add_child(_section("Warrant", x, 132))
-	var warrants := [[r.town_warrant, r.warrant_bought, 0], [r.shop.extra_warrant, r.shop.extra_bought, 1]]
-	for w in warrants:
-		if w[0] == "" or w[1]:
-			continue
-		var v := _named_view("warrant", w[0], SHOP_CARD, {"zone": "warrant", "index": w[2]})
-		v.price_text = str(r.warrant_price(w[0]))
-		v.position = Vector2(x, 146)
-		v.sway = int(w[2]) + 7
-		var warrant_index: int = w[2]
-		_droppable(v, "top", "Drop to buy for %d" % r.warrant_price(w[0]), func() -> void: _act({"a": "buy_warrant", "index": warrant_index}))
-		middle.add_child(v)
-		x += 70
+		_droppable(v, "top", "Drop to buy and open for %d" % run.offer_price(p), func() -> void: _act({"a": "buy_pack", "slot": i}))
+		return v
+
+
+func _warrant_maker(id: String, index: int) -> Callable:
+	return func(at_size: Vector2) -> CardView:
+		var v := _named_view("warrant", id, at_size, {"zone": "warrant", "index": index})
+		v.price_text = str(run.warrant_price(id))
+		v.sway = index + 7
+		_droppable(v, "top", "Drop to buy for %d" % run.warrant_price(id), func() -> void: _act({"a": "buy_warrant", "index": index}))
+		return v
 
 
 func _middle_pack() -> void:
@@ -1505,6 +1639,8 @@ func _build_buttons() -> void:
 				_add_button("Skip for the Favor", func() -> void: _act({"a": "skip_show"}))
 			if r.town_swaps < r.stat("patron_swaps"):
 				_add_button("Swap Patron (10)", func() -> void: _act({"a": "swap_patron"}))
+			if r.tour and r.scenario != "" and r.town_scenario_swaps < r.stat("scenario_swaps"):
+				_add_button("Another Scenario", func() -> void: _act({"a": "swap_scenario"}), false, UiTheme.GOLD.darkened(0.45))
 		RunState.Phase.IN_SHOW:
 			var picked := selected_hand.size()
 			# Settings > Buttons can put Discard before Play (as Balatro's button order does).
@@ -1533,11 +1669,11 @@ func _build_buttons() -> void:
 				var dest: String = (r.route[r.route_row + 1] as Array)[col]["city"]
 				var options: Array = ContentDB.get_def(dest).data.get("options", [])
 				if options.is_empty():
-					_add_button("Travel to " + UiTheme.name_of(dest), func() -> void: _act({"a": "travel", "index": col}), false, UiTheme.GOLD.darkened(0.25), true)
+					_add_button("Travel to " + UiTheme.name_of(dest), func() -> void: _roll_to(dest, {"a": "travel", "index": col}), false, UiTheme.GOLD.darkened(0.25), true)
 				else:
 					for o in options.size():
 						var option := o
-						_add_button("%s: %s" % [UiTheme.name_of(dest), options[o]], func() -> void: _act({"a": "travel", "index": col, "slot": option}), false, UiTheme.GOLD.darkened(0.25), o == 0)
+						_add_button("%s: %s" % [UiTheme.name_of(dest), options[o]], func() -> void: _roll_to(dest, {"a": "travel", "index": col, "slot": option}), false, UiTheme.GOLD.darkened(0.25), o == 0)
 		RunState.Phase.ENCORE:
 			if r.show_counters.get("encore", "") == "live":
 				var picked := selected_hand.size()
@@ -1549,6 +1685,20 @@ func _build_buttons() -> void:
 	_contextual_buttons()
 	if r.phase == RunState.Phase.IN_SHOW:
 		_add_deck_pile()
+
+
+## The troupe's wagon rolls along the road to `dest` (batch 13), then the travel happens.
+func _roll_to(dest: String, action: Dictionary) -> void:
+	if busy:
+		return
+	if _map != null and is_instance_valid(_map) and not Settings.reduce_motion:
+		busy = true
+		Feel.play("deal")
+		await _map.roll_wagon(dest)
+		busy = false
+		if not is_inside_tree():
+			return
+	_act(action)
 
 
 ## At the right of the buttons: the draw pile, face down, with how many cards are left in
@@ -1622,10 +1772,16 @@ func _build_overlay() -> void:
 	panel.size = Vector2(420, 0)
 	UiTheme.stage(overlay).add_child(panel)
 	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 6)
+	col.add_theme_constant_override("separation", 5)
 	panel.add_child(col)
-	col.add_child(_centred(UiTheme.title("The show is over" if lost else "All 8 towns conquered!", 24, accent)))
+	var chapter := ContentDB.get_def(r.chapter)
+	var heading := "The show is over" if lost else "All 8 towns conquered!"
+	if chapter != null:
+		heading = ("Chapter %d is lost" if lost else "Chapter %d cleared!") % int(chapter.data["n"])
+	col.add_child(_centred(UiTheme.title(heading, 22, accent)))
 	var what := UiTheme.name_of(r.challenge) if r.challenge != "" else "%s, Stake %d" % [UiTheme.name_of(r.deck_id), r.stake]
+	if chapter != null:
+		what = "%s - %s" % [UiTheme.name_of(chapter.id), what]
 	col.add_child(_centred(UiTheme.label("Town %d - %s   |   %s" % [r.town, SHOW_NAMES[r.show_index], what], 10, UiTheme.MUTED)))
 	if lost:
 		var reason := _loss_reason(r)
@@ -1633,17 +1789,40 @@ func _build_overlay() -> void:
 		why.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		why.add_theme_color_override("font_color", UiTheme.MULT.lightened(0.35))
 		col.add_child(why)
-	col.add_child(_end_stats(r))
+		var gloat: String = TranslationServer.translate(r.town_patron + ".gloat") if r.show_index == Shows.PATRON and not Game.run_meta.get("gave_up", false) else ""
+		if gloat != "" and gloat != r.town_patron + ".gloat":
+			col.add_child(_centred(UiTheme.title("%s: “%s”" % [UiTheme.name_of(r.town_patron), gloat], 10, Color("f0c0a0"))))
+	elif chapter != null:
+		var story := _wrapped(TranslationServer.translate(chapter.id + ".after"), 10, 396)
+		story.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		story.add_theme_color_override("font_color", Color("f3e3c0"))
+		col.add_child(story)
+	if chapter == null:
+		col.add_child(_end_stats(r))
+	for line in _gains_lines(r):
+		col.add_child(_centred(UiTheme.label(line[0], 10, line[1])))
+	var carrying := chapter != null and not lost and int(chapter.data["n"]) < CampaignCards.COUNT
 	if not r.zanni.is_empty():
-		col.add_child(UiTheme.label("Your Jesters", 9, UiTheme.MUTED))
+		col.add_child(UiTheme.label("Choose a Jester to carry into the next chapter:" if carrying else "Your Jesters", 9, UiTheme.GOLD if carrying else UiTheme.MUTED))
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 4)
-		for z in r.zanni:
+		_carry_pick = clampi(_carry_pick, 0, r.zanni.size() - 1)
+		for i in r.zanni.size():
+			var z := r.zanni[i]
 			var v := CardView.new(Vector2(40, 56))
-			v.kind = "zanni"
+			v.kind = z.def().kind if z.def() != null else "zanni"
 			v.def_id = z.def_id
 			v.edition = z.edition
-			v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			_fame_look(v, z)
+			if carrying:
+				var pick := i
+				v.selected = i == _carry_pick
+				v.tapped.connect(func(_view: CardView) -> void:
+					Feel.play("select")
+					_carry_pick = pick
+					_build_overlay())
+			else:
+				v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			row.add_child(v)
 		col.add_child(row)
 	var daily := Game.run_meta.has("daily_date")
@@ -1657,10 +1836,16 @@ func _build_overlay() -> void:
 	buttons_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	col.add_child(buttons_row)
 	if lost:
-		buttons_row.add_child(UiTheme.button("Practise this daily" if daily else "New run", func() -> void:
+		buttons_row.add_child(UiTheme.button("Practise this daily" if daily else ("Try the chapter again" if chapter != null else "New run"), func() -> void:
 			Feel.play("play")
 			Game.restart()
 			restart(), 13, UiTheme.MULT))
+	elif chapter != null:
+		buttons_row.add_child(UiTheme.button("On to the campaign", func() -> void:
+			Feel.play("play")
+			Game.finish_chapter(r.zanni[_carry_pick] if carrying and not r.zanni.is_empty() else null)
+			Game.open_campaign = true
+			back_to_menu.emit(), 13, UiTheme.MULT))
 	else:
 		buttons_row.add_child(UiTheme.button("Keep touring", func() -> void:
 			Game.win_seen = true
@@ -1678,6 +1863,49 @@ func _build_overlay() -> void:
 		var t := panel.create_tween().set_parallel()
 		t.tween_property(panel, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		t.tween_property(panel, "modulate:a", 1.0, 0.18)
+
+
+## What the run brought the player (batch 13), as [text, colour] lines: scudi, the Jesters'
+## fame (and any new Maestro), the nemesis, a chapter's first-clear reward. Nothing for a
+## seeded run.
+func _gains_lines(r: RunState) -> Array:
+	var out := []
+	if Game.run_meta.get("seeded", false):
+		return out
+	var scudi := 0
+	for item in WagonCards.scudi_for(r):
+		scudi += int(item["v"])
+	var chapter := ContentDB.get_def(r.chapter)
+	var reward: Dictionary = {}
+	var first_clear: bool = chapter != null and r.won and int(chapter.data["n"]) == Game.profile.chapters_cleared + (0 if Game.recorded else 1)
+	if first_clear:
+		reward = chapter.data["reward"]
+		scudi += int(reward.get("scudi", 0))
+	var famous: Array = r.fame.keys()
+	famous.sort_custom(func(a: String, b: String) -> bool: return int(r.fame[a]) > int(r.fame[b]))
+	var fame_text := ", ".join(famous.slice(0, 3).map(func(id: String) -> String: return "%s +%d" % [UiTheme.name_of(id), int(r.fame[id])]))
+	if scudi > 0 or fame_text != "":
+		out.append(["+%d scudi for the Wagon%s" % [scudi, ("   |   Fame: " + fame_text) if fame_text != "" else ""], UiTheme.GOLD])
+	for id in famous:
+		var after := Game.profile.fame_of(id) + (0 if Game.recorded else int(r.fame[id]))
+		if after >= Fame.MAESTRO and after - int(r.fame[id]) < Fame.MAESTRO:
+			out.append(["%s has become %s!" % [UiTheme.name_of(id), Fame.title(id, UiTheme.name_of(id))], UiTheme.GOLD.lightened(0.3)])
+	if bool(r.extras.get("rivalry", false)):
+		if int(r.counters.get("nemesis_beaten", 0)) > 0:
+			out.append(["Vendetta! Your nemesis is beaten.", UiTheme.GOOD])
+		elif r.phase == RunState.Phase.LOST and r.show_index == Shows.PATRON and not Game.run_meta.get("gave_up", false):
+			out.append(["%s is your nemesis now: it waits for you in your next run." % UiTheme.name_of(r.town_patron), UiTheme.MULT.lightened(0.35)])
+	if first_clear:
+		var parts := []
+		if reward.has("deck"):
+			parts.append("the %s deck" % UiTheme.name_of(reward["deck"]))
+		if reward.has("cosmetic"):
+			parts.append(UiTheme.name_of(reward["cosmetic"]) + " for the Wagon")
+		if reward.has("title"):
+			parts.append("the title " + str(reward["title"]))
+		if not parts.is_empty():
+			out.append(["Reward: " + ", ".join(parts), UiTheme.GOLD.lightened(0.2)])
+	return out
 
 
 ## Copies the run's seed, to replay it as a Seeded run or share it.
@@ -2223,7 +2451,8 @@ func _describe_selection(id: String) -> String:
 	if zone == "city":
 		lines.append("Shop: " + TranslationServer.translate(id + ".lean"))
 	var def := ContentDB.get_def(id)
-	if def != null and KIND_HELP.has(def.kind):
+	# An owned Jester's tip (above the table) already explains it; here, just the essentials.
+	if def != null and KIND_HELP.has(def.kind) and zone != "zanni":
 		var what: String = KIND_HELP[def.kind]
 		if def.kind == "zanni":
 			what = CardView.RARITY_NAMES[clampi(def.rarity, 0, 3)] + " " + what
@@ -2231,7 +2460,7 @@ func _describe_selection(id: String) -> String:
 		lines.append(what)
 	if zone == "zanni":
 		var z := run.zanni[i]
-		lines.append_array(_jester_lines(i).filter(func(l: String) -> bool: return not l.begins_with("Sells")))
+		lines.append_array(_jester_lines(i).filter(func(l: String) -> bool: return l.begins_with("Right now") or l.begins_with("This show")))
 		if z.edition != "":
 			lines.append("%s: %s" % [UiTheme.name_of(z.edition), UiTheme.text_of(z.edition)])
 		if z.state.get("eternal", false):

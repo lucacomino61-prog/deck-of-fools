@@ -1,21 +1,17 @@
 class_name MenuScreen
 extends Control
-## The title menu, laid out to explain itself. The left panel sets up a new run: a deck, then
-## a stake, each with what it does, and how a locked one unlocks; or a challenge. The right
-## column shows the tour in progress with Continue (or how a run works), the daily run, and
-## Collection, Profile, Leaderboards, How to play, Seeded run and Settings. The player's
-## name sits in the corner.
+## The title menu, compact and big, on the full width of the screen: the chosen deck's
+## painting large on the left; beside it the deck (or challenge), the stake, each with what it
+## does or how it unlocks, and a big Play; under Play, the tour in progress (or the campaign's
+## next chapter) and the daily run; along the bottom one row of tiles for everything else.
+## The player's name sits in the top right corner.
 
 signal start
 
-const DECK_WORDS := "Your starting cards, plus one special rule."
-const STAKE_WORDS := "How hard the run is. Each stake adds its rule on top of every stake below it."
-const CHALLENGE_WORDS := "A set run with its own deck and special rules. Every run you win unlocks five."
-const RUN_WORDS := "Travel through 8 towns. Each town has three shows: the Matinee, the Evening show and the Patron. Beat each show's target score with poker hands, then spend your ducats in the shop on Jesters that bend the rules."
-const LEFT := Vector2(16, 58)
-const LEFT_W := 322.0
-const RIGHT_X := 348.0
-const RIGHT_W := 276.0
+const PAD := 16.0
+const TOP := 50.0
+const CARD := Vector2(172, 241)
+const TILE_Y := 316.0
 
 var deck_ids: Array = []
 var deck_index := 0
@@ -25,6 +21,12 @@ var challenge_index := 0
 var mode := "deck"
 ## Today's daily run from the server, with this player's attempt (empty until it arrives).
 var daily_info: Dictionary = {}
+## Play was pressed once while a tour is saved: the next press replaces it.
+var _confirm_new := false
+## The menu's first build plays its entrance; rebuilds (cycling a deck…) don't.
+var _shown := false
+## The way the deck card slides in after cycling (-1, 0, 1).
+var _slide := 0
 
 
 func _ready() -> void:
@@ -36,7 +38,19 @@ func _ready() -> void:
 	Feel.settings_changed.connect(func() -> void:
 		if is_inside_tree():
 			_build())
+	get_viewport().size_changed.connect(func() -> void:
+		if is_inside_tree():
+			_build())
 	_fetch_daily()
+	# Back from a cleared chapter: the campaign again, and the first time the Wagon too.
+	if Game.open_campaign:
+		Game.open_campaign = false
+		UiTheme.show_sheet(CampaignSheet.new(_start_chapter))
+		if not Game.profile.wagon_seen:
+			Game.profile.wagon_seen = true
+			Game.save_profile()
+			UiTheme.show_sheet(WagonSheet.new("Your troupe's wagon! Spend the scudi every run earns on props, cosmetics and early unlocks."))
+		return
 	# After the first run, a guest is offered an account once.
 	if Game.first_run_finished() and Online.signed_in() and Online.is_guest() and not Settings.asked_account:
 		Settings.asked_account = true
@@ -59,122 +73,220 @@ func _build() -> void:
 	add_child(bg)
 	Feel.backdrop(bg)
 	Feel.mood("menu")
-	var stage := UiTheme.stage(self)
+	var w := UiTheme.wide_width(self, 860.0)
+	var stage := UiTheme.wide_stage(self, 860.0)
 
-	# Centred over the left of the screen, clear of the account chip in the top right.
-	var title := UiTheme.title("DECK OF FOOLS", 27, UiTheme.GOLD)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.position = Vector2(0, 5)
-	title.size = Vector2(560, 36)
-	stage.add_child(title)
-	var sub := UiTheme.title("A troupe of Jesters against the house", 10, UiTheme.TEXT)
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sub.position = Vector2(0, 38)
-	sub.size = Vector2(560, 14)
-	stage.add_child(sub)
+	var logo := UiTheme.title("DECK OF FOOLS", 26, UiTheme.GOLD)
+	logo.position = Vector2(PAD, 8)
+	stage.add_child(logo)
+	_build_account_chip(stage, w)
 
-	_build_setup(stage)
-	_build_side(stage)
-	_build_account_chip(stage)
+	var card := _build_card(stage)
+	var right := _build_setup(stage, w)
+	var tiles := _build_tiles(stage, w)
+	if not _shown:
+		_shown = true
+		_enter([card, right, tiles])
+	elif _slide != 0:
+		_slide_in(card, _slide)
+	_slide = 0
 
 
-# --- the left panel: setting up a new run ---
+# --- the deck card ---
 
-func _build_setup(stage: Control) -> void:
-	var panel := PanelContainer.new()
-	panel.position = LEFT
-	panel.size = Vector2(LEFT_W, 0)
-	stage.add_child(panel)
+## The deck (or the challenge's deck) as a big painted card on the left; a locked one dimmed.
+func _build_card(stage: Control) -> Control:
+	var v := CardView.new(CARD)
+	v.kind = "deck"
+	v.def_id = _shown_deck()
+	v.dimmed = _locked()
+	v.position = Vector2(PAD, TOP + 2)
+	v.sway = 1
+	v.tapped.connect(func(_view: CardView) -> void: _cycle(1))
+	stage.add_child(v)
+	return v
+
+
+func _shown_deck() -> String:
+	if mode == "deck":
+		return deck_ids[deck_index]
+	return str(ContentDB.get_def(challenge_ids[challenge_index]).data.get("deck", deck_ids[0]))
+
+
+func _locked() -> bool:
+	if mode == "deck":
+		return not Game.profile.deck_unlocked(deck_ids[deck_index])
+	return not Game.profile.challenge_unlocked(challenge_ids[challenge_index])
+
+
+# --- beside it: deck, stake, Play, then Continue and the daily run ---
+
+func _build_setup(stage: Control, w: float) -> Control:
+	var x := PAD + CARD.x + 16.0
+	var cw := w - x - PAD
 	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 3)
-	panel.add_child(col)
+	col.position = Vector2(x, TOP)
+	col.size = Vector2(cw, 0)
+	col.add_theme_constant_override("separation", 4)
+	stage.add_child(col)
 
 	var tabs := HBoxContainer.new()
 	tabs.add_theme_constant_override("separation", 4)
 	tabs.add_child(_tab("New run", "deck"))
 	tabs.add_child(_tab("Challenges", "challenge"))
+	var count := UiTheme.label(_count_text(), 10, UiTheme.MUTED)
+	count.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	tabs.add_child(count)
 	col.add_child(tabs)
 
-	var locked := false
-	if mode == "deck":
-		var id: String = deck_ids[deck_index]
-		var open_count := deck_ids.filter(func(d: String) -> bool: return Game.profile.deck_unlocked(d)).size()
-		_heading(col, "1", "Deck", "%d of %d unlocked" % [open_count, deck_ids.size()], UiTheme.POINTS)
-		col.add_child(_words(DECK_WORDS, 8, UiTheme.MUTED))
-		locked = not Game.profile.deck_unlocked(id)
-		col.add_child(_picker(UiTheme.name_of(id), locked, _cycle))
-		col.add_child(_words(_deck_lock_reason(id) if locked else UiTheme.text_of(id), 10, UiTheme.MULT.lightened(0.3) if locked else UiTheme.TEXT, 26))
-		if not locked:
-			var top := Game.profile.max_stake(id)
-			stake = clampi(stake, 1, top)
-			var stake_def: ContentDef = ContentDB.pool("stake")[stake - 1]
-			_heading(col, "2", "Stake", "up to %d of %d" % [top, Unlocks.TOP_STAKE], UiTheme.MULT)
-			col.add_child(_words(STAKE_WORDS, 8, UiTheme.MUTED))
-			col.add_child(_picker("Stake %d: %s" % [stake, UiTheme.name_of(stake_def.id)], false, _stake))
-			col.add_child(_words(UiTheme.text_of(stake_def.id), 10, UiTheme.TEXT, 22))
-			if top < Unlocks.TOP_STAKE and stake == top:
-				col.add_child(_words("Win a run with %s on this stake to open Stake %d." % [UiTheme.name_of(id), top + 1], 8, UiTheme.MUTED))
-	else:
-		var id: String = challenge_ids[challenge_index]
-		var open_count := challenge_ids.filter(func(c: String) -> bool: return Game.profile.challenge_unlocked(c)).size()
-		_heading(col, "", "Challenge", "%d of %d unlocked" % [open_count, challenge_ids.size()], UiTheme.GOLD)
-		col.add_child(_words(CHALLENGE_WORDS, 8, UiTheme.MUTED))
-		locked = not Game.profile.challenge_unlocked(id)
-		col.add_child(_picker(UiTheme.name_of(id), locked, _cycle))
-		if locked:
-			var wins_needed := challenge_index / Unlocks.CHALLENGES_PER_WIN + 1
-			col.add_child(_words("Locked. Win %d more run%s to unlock it." % [wins_needed - Game.profile.total_wins, "" if wins_needed - Game.profile.total_wins == 1 else "s"], 10, UiTheme.MULT.lightened(0.3)))
-		col.add_child(_words(UiTheme.text_of(id), 10, UiTheme.TEXT, 40))
-		var deck := str(ContentDB.get_def(id).data.get("deck", ""))
-		if deck != "":
-			col.add_child(_words("Deck: %s. %s" % [UiTheme.name_of(deck), UiTheme.text_of(deck)], 8, UiTheme.MUTED))
+	var locked := _locked()
+	var id: String = deck_ids[deck_index] if mode == "deck" else challenge_ids[challenge_index]
+	col.add_child(_picker(UiTheme.name_of(id), 24, _cycle, locked))
+	var about := UiTheme.text_of(id)
+	if locked:
+		about = _deck_lock_reason(id) if mode == "deck" else _challenge_lock_reason()
+	col.add_child(_words(about, 12, UiTheme.MULT.lightened(0.35) if locked else UiTheme.TEXT, cw, 30))
 
-	var play := UiTheme.button("Locked" if locked else "Play", _on_start, 16, UiTheme.MULT)
+	if mode == "deck" and not locked:
+		var top := Game.profile.max_stake(id)
+		stake = clampi(stake, 1, top)
+		var stake_def: ContentDef = ContentDB.pool("stake")[stake - 1]
+		col.add_child(_picker("Stake %d: %s" % [stake, UiTheme.name_of(stake_def.id)], 16, _stake, false))
+		var stake_words := UiTheme.text_of(stake_def.id)
+		if top < Unlocks.TOP_STAKE and stake == top:
+			stake_words += ". Win here to open Stake %d." % (top + 1)
+		col.add_child(_words(stake_words, 11, UiTheme.MUTED, cw, 15))
+	elif mode == "challenge":
+		var deck := str(ContentDB.get_def(id).data.get("deck", ""))
+		col.add_child(_words("Deck: %s. %s" % [UiTheme.name_of(deck), UiTheme.text_of(deck)], 11, UiTheme.MUTED, cw, 36))
+
+	var play_text := "Locked" if locked else ("Play" if not _confirm_new else "Replace your saved tour?")
+	var play := UiTheme.button(play_text, _on_start, 22 if not _confirm_new else 15, UiTheme.MULT)
+	play.add_theme_font_override("font", UiTheme.title_font)
 	play.disabled = locked
-	play.position = Vector2(LEFT.x, 312)
-	play.size = Vector2(LEFT_W, 30)
-	stage.add_child(play)
-	if Game.has_saved_run() and not locked:
-		var warn := UiTheme.label("Starting a new run ends the tour in progress.", 8, UiTheme.MUTED)
-		warn.position = Vector2(LEFT.x, 344)
-		warn.size = Vector2(LEFT_W, 10)
-		warn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		stage.add_child(warn)
+	play.custom_minimum_size = Vector2(cw, 44)
+	col.add_child(play)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	row.custom_minimum_size = Vector2(cw, 0)
+	row.add_child(_tour_card())
+	row.add_child(_daily_card())
+	col.add_child(row)
+	return col
+
+
+func _count_text() -> String:
+	if mode == "deck":
+		return "%d of %d decks unlocked" % [deck_ids.filter(func(d: String) -> bool: return Game.profile.deck_unlocked(d)).size(), deck_ids.size()]
+	return "%d of %d challenges unlocked" % [challenge_ids.filter(func(c: String) -> bool: return Game.profile.challenge_unlocked(c)).size(), challenge_ids.size()]
+
+
+## The tour in progress with Continue; without one, the campaign's next chapter.
+func _tour_card() -> Control:
+	var saved := Game.peek_saved_run()
+	if saved != null:
+		var chapter := ContentDB.get_def(saved.chapter)
+		var heading := "Tour in progress" if chapter == null else "Chapter %d in progress" % int(chapter.data["n"])
+		var what := UiTheme.name_of(saved.challenge) if saved.challenge != "" else "%s, Stake %d" % [UiTheme.name_of(saved.deck_id), saved.stake]
+		var info := "Town %d, %s.  %s" % [saved.town, RunScreen.SHOW_NAMES[saved.show_index], what]
+		return _card(heading, info, "Continue", _on_continue, UiTheme.POINTS)
+	var cleared := Game.profile.chapters_cleared
+	if cleared >= CampaignCards.COUNT:
+		return _card("Il Lungo Giro", "All %d chapters cleared. Play any again." % CampaignCards.COUNT, "Open", func() -> void: _open(CampaignSheet.new(_start_chapter)), UiTheme.GOLD.darkened(0.35))
+	var next := CampaignCards.chapters()[cleared]
+	return _card("Campaign", "Chapter %d: %s" % [cleared + 1, UiTheme.name_of(next.id)], "Set out", func() -> void: _open(CampaignSheet.new(_start_chapter)), UiTheme.GOLD.darkened(0.35))
+
+
+## The daily run: today's deck for everyone, one ranked try (it needs the server) and
+## unlimited practice.
+func _daily_card() -> Control:
+	var setup := Online.daily_setup()
+	var attempt: Variant = daily_info.get("attempt")
+	var ranked_text := "Ranked"
+	var can_rank := Online.online and Online.signed_in() and not daily_info.is_empty()
+	if attempt is Dictionary:
+		can_rank = false
+		ranked_text = "Town %d" % int(attempt["town"]) if bool(attempt["finished"]) else "Started"
+	var box := _box(UiTheme.GOOD.darkened(0.3))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	box.add_child(row)
+	var words := VBoxContainer.new()
+	words.add_theme_constant_override("separation", 0)
+	words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	words.add_child(UiTheme.title("Daily run", 13, UiTheme.GOLD))
+	words.add_child(UiTheme.label("%s, Stake 1%s" % [UiTheme.name_of(setup["deck"]), "" if can_rank or attempt is Dictionary else ". Offline"], 10, UiTheme.MUTED))
+	row.add_child(words)
+	var ranked := UiTheme.button(ranked_text, _start_daily.bind(true), 11, UiTheme.MULT)
+	ranked.disabled = not can_rank
+	ranked.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(ranked)
+	var practice := UiTheme.button("Practice", _start_daily.bind(false), 11, UiTheme.PANEL_LIGHT)
+	practice.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(practice)
+	return box.get_parent()
+
+
+## A small card: a heading, one line about it and one button on the right.
+func _card(heading: String, info: String, action: String, on_press: Callable, colour: Color) -> Control:
+	var box := _box(colour)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	box.add_child(row)
+	var words := VBoxContainer.new()
+	words.add_theme_constant_override("separation", 0)
+	words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	words.add_child(UiTheme.title(heading, 13, UiTheme.GOLD))
+	var l := UiTheme.label(info, 10, UiTheme.MUTED)
+	l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	l.custom_minimum_size = Vector2(60, 0)
+	words.add_child(l)
+	row.add_child(words)
+	var b := UiTheme.button(action, on_press, 12, colour)
+	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(b)
+	return box.get_parent()
+
+
+func _box(border: Color) -> VBoxContainer:
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", UiTheme.panel_box(Color(UiTheme.PANEL, 0.94), border))
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.size_flags_stretch_ratio = 1.0
+	var inner := VBoxContainer.new()
+	panel.add_child(inner)
+	return inner
 
 
 func _tab(text: String, tab_mode: String) -> Button:
 	var b := UiTheme.button(text, func() -> void:
+		Feel.play("click")
 		mode = tab_mode
-		_build(), 10, UiTheme.PANEL_LIGHT.lightened(0.15) if mode == tab_mode else UiTheme.PANEL_DARK)
-	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_confirm_new = false
+		_build(), 11, UiTheme.GOLD.darkened(0.35) if mode == tab_mode else UiTheme.PANEL_DARK)
+	b.custom_minimum_size = Vector2(96, 0)
 	return b
 
 
-## A step heading: a coloured number, the name, and a note on the right.
-func _heading(col: Control, number: String, text: String, note: String, colour: Color) -> void:
+## A name in display type, with its < and > arrows together on the right.
+func _picker(text: String, font_size: int, step: Callable, locked: bool) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
-	if number != "":
-		row.add_child(UiTheme.title(number, 14, colour))
-	var name_label := UiTheme.title(text, 13, UiTheme.GOLD)
+	var name_label := UiTheme.title(("Locked: " if locked else "") + text, font_size, UiTheme.MUTED if locked else UiTheme.TEXT)
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	row.add_child(name_label)
-	row.add_child(UiTheme.label(note, 8, UiTheme.MUTED))
-	col.add_child(row)
-
-
-func _picker(text: String, locked: bool, step: Callable) -> HBoxContainer:
-	var row := HBoxContainer.new()
-	row.add_child(UiTheme.button("<", func() -> void: step.call(-1)))
-	var name_label := UiTheme.title(("Locked: " if locked else "") + text, 13, UiTheme.MUTED if locked else UiTheme.TEXT)
-	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(name_label)
-	row.add_child(UiTheme.button(">", func() -> void: step.call(1)))
+	for arrow in [["<", -1], [">", 1]]:
+		var b := UiTheme.button(arrow[0], func() -> void: step.call(arrow[1]), 13)
+		b.custom_minimum_size = Vector2(34, 0)
+		b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(b)
 	return row
 
 
-func _words(text: String, font_size: int, colour: Color, min_height := 0.0, width := LEFT_W - 14.0) -> Label:
+func _words(text: String, font_size: int, colour: Color, width: float, min_height := 0.0) -> Label:
 	var l := UiTheme.label(text, font_size, colour)
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.custom_minimum_size = Vector2(width, min_height)
@@ -184,73 +296,93 @@ func _words(text: String, font_size: int, colour: Color, min_height := 0.0, widt
 func _deck_lock_reason(id: String) -> String:
 	var parts := str(Unlocks.DECK_RULES.get(id, "")).split(":")
 	if parts[0] == "discover":
-		return "Locked. Discover %s different cards across your runs to unlock it (you have %d)." % [parts[1], Game.profile.discovered.size()]
-	return "Locked. Win a run with %s to unlock it." % UiTheme.name_of(parts[1])
+		return "Locked. Discover %s different cards across your runs (you have %d), or buy it in the Wagon." % [parts[1], Game.profile.discovered.size()]
+	return "Locked. Win a run with %s, or buy it in the Wagon." % UiTheme.name_of(parts[1])
 
 
-# --- the right column: the tour in progress, the record, help and settings ---
-
-func _build_side(stage: Control) -> void:
-	var col := VBoxContainer.new()
-	col.position = Vector2(RIGHT_X, LEFT.y)
-	col.size = Vector2(RIGHT_W, 0)
-	col.add_theme_constant_override("separation", 6)
-	stage.add_child(col)
-
-	var saved := Game.peek_saved_run()
-	var tour := _box(col, UiTheme.POINTS.darkened(0.2))
-	if saved != null:
-		tour.add_child(UiTheme.title("Tour in progress", 12, UiTheme.GOLD))
-		var deck_line := UiTheme.name_of(saved.challenge) if saved.challenge != "" else "%s, Stake %d" % [UiTheme.name_of(saved.deck_id), saved.stake]
-		tour.add_child(UiTheme.label(deck_line, 10))
-		tour.add_child(UiTheme.label("Town %d of 8 - %s" % [saved.town, RunScreen.SHOW_NAMES[saved.show_index]], 10))
-		tour.add_child(UiTheme.label("%d ducats - %d Jesters" % [saved.ducats, saved.zanni.size()], 10, UiTheme.MUTED))
-		tour.add_child(UiTheme.button("Continue the tour", _on_continue, 12, UiTheme.POINTS))
-	else:
-		tour.add_child(UiTheme.title("How a run works", 12, UiTheme.GOLD))
-		tour.add_child(_words(RUN_WORDS, 8, UiTheme.TEXT, 0.0, RIGHT_W - 14.0))
-
-	_build_daily(col)
-
-	var more := GridContainer.new()
-	more.columns = 2
-	more.add_theme_constant_override("h_separation", 4)
-	more.add_theme_constant_override("v_separation", 4)
-	for entry in [["Collection", func() -> void: _open(CollectionSheet.new())], ["Profile", func() -> void: _open(ProfileSheet.new())],
-			["Leaderboards", func() -> void: _open(LeaderboardSheet.new())], ["How to play", func() -> void: _open(HowToPlay.new())],
-			["Seeded run", func() -> void: _open(SeedSheet.new(_start_seeded, _setup_text()))], ["Settings", func() -> void: _open(SettingsSheet.new())]]:
-		var b := UiTheme.button(entry[0], entry[1], 11, UiTheme.POINTS.darkened(0.15) if entry[0] != "Settings" else UiTheme.PANEL_LIGHT)
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		b.custom_minimum_size = Vector2(0, 24)
-		more.add_child(b)
-	col.add_child(more)
+func _challenge_lock_reason() -> String:
+	var wins_needed := challenge_index / Unlocks.CHALLENGES_PER_WIN + 1 - Game.profile.total_wins
+	return "Locked. Win %d more run%s, or buy it in the Wagon." % [wins_needed, "" if wins_needed == 1 else "s"]
 
 
-## The daily run: today's deck for everyone, one ranked try (it needs the server) and
-## unlimited practice.
-func _build_daily(col: Control) -> void:
-	var box := _box(col, UiTheme.GOOD.darkened(0.25))
-	var setup := Online.daily_setup()
-	box.add_child(UiTheme.title("Daily run", 12, UiTheme.GOLD))
-	box.add_child(_words("Same cards for everyone today: %s deck, Stake 1. One ranked try; practice as often as you like." % UiTheme.name_of(setup["deck"]), 8, UiTheme.MUTED, 0.0, RIGHT_W - 14.0))
-	var attempt: Variant = daily_info.get("attempt")
-	var ranked_text := "Ranked try"
-	var can_rank := Online.online and Online.signed_in() and not daily_info.is_empty()
-	if attempt is Dictionary:
-		can_rank = false
-		ranked_text = "Ranked: town %d" % int(attempt["town"]) if bool(attempt["finished"]) else "Ranked: started"
-	elif not can_rank:
-		ranked_text = "Ranked: needs a connection"
+# --- along the bottom: everything else ---
+
+func _build_tiles(stage: Control, w: float) -> Control:
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 4)
-	var ranked := UiTheme.button(ranked_text, _start_daily.bind(true), 11, UiTheme.MULT)
-	ranked.disabled = not can_rank
-	ranked.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(ranked)
-	var practice := UiTheme.button("Practice", _start_daily.bind(false), 11, UiTheme.PANEL_LIGHT)
-	row.add_child(practice)
-	box.add_child(row)
+	row.position = Vector2(PAD, TILE_Y)
+	row.size = Vector2(w - 2.0 * PAD, 30)
+	row.add_theme_constant_override("separation", 5)
+	stage.add_child(row)
+	var entries := [
+		["Wagon  %d" % Game.profile.scudi, func() -> void: _open(WagonSheet.new()), UiTheme.GOLD.darkened(0.4)],
+		["Collection", func() -> void: _open(CollectionSheet.new()), UiTheme.POINTS.darkened(0.2)],
+		["Profile", func() -> void: _open(ProfileSheet.new()), UiTheme.POINTS.darkened(0.2)],
+		["Leaderboards", func() -> void: _open(LeaderboardSheet.new()), UiTheme.POINTS.darkened(0.2)],
+		["How to play", func() -> void: _open(HowToPlay.new()), UiTheme.POINTS.darkened(0.2)],
+		["Seeded run", func() -> void: _open(SeedSheet.new(_start_seeded, _setup_text())), UiTheme.POINTS.darkened(0.2)],
+		["Settings", func() -> void: _open(SettingsSheet.new()), UiTheme.PANEL_LIGHT],
+	]
+	# With a tour saved the Campaign card isn't shown above, so it gets a tile.
+	if Game.has_saved_run():
+		entries.push_front(["Campaign", func() -> void: _open(CampaignSheet.new(_start_chapter)), UiTheme.GOLD.darkened(0.4)])
+	# The longest label ("Leaderboards") fits on one line at every width.
+	var tile_w := (row.size.x - 5.0 * (entries.size() - 1)) / entries.size()
+	var font_size := 11 if tile_w >= 96.0 else (10 if tile_w >= 80.0 else 9)
+	for e in entries:
+		var b := UiTheme.button(e[0], e[1], font_size, e[2])
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.custom_minimum_size = Vector2(0, 30)
+		b.clip_text = true
+		row.add_child(b)
+	return row
 
+
+## The player's name in the corner: tap it for the profile.
+func _build_account_chip(stage: Control, w: float) -> void:
+	var name_text := str(Online.user.get("name", "Offline")) if Online.signed_in() else "Offline"
+	var label := name_text + ("  -  save progress" if Online.signed_in() and Online.is_guest() else "")
+	var chip := UiTheme.button(label, func() -> void: _open(ProfileSheet.new()), 10, UiTheme.PANEL_DARK)
+	chip.clip_text = true
+	chip.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	chip.position = Vector2(w - PAD - 200, 12)
+	chip.custom_minimum_size = Vector2(200, 22)
+	chip.size = Vector2(200, 22)
+	chip.alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	stage.add_child(chip)
+
+
+# --- motion ---
+
+## The menu's arrival: the card, the setup and the tiles rise in one after another (fast,
+## ease-out); opacity only for the tiles, which are tap targets.
+func _enter(groups: Array) -> void:
+	if Settings.reduce_motion:
+		return
+	for i in groups.size():
+		var node: Control = groups[i]
+		var to := node.position
+		node.modulate.a = 0.0
+		if i < 2:
+			node.position.y += 10.0
+		var t := node.create_tween().set_parallel()
+		t.tween_property(node, "modulate:a", 1.0, 0.32).set_delay(i * 0.06).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+		if i < 2:
+			t.tween_property(node, "position:y", to.y, 0.32).set_delay(i * 0.06).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+
+
+## After cycling, the new deck slides in from the side it came from.
+func _slide_in(card: Control, direction: int) -> void:
+	if Settings.reduce_motion:
+		return
+	var to := card.position.x
+	card.position.x += 14.0 * direction
+	card.modulate.a = 0.0
+	var t := card.create_tween().set_parallel()
+	t.tween_property(card, "position:x", to, 0.18).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+	t.tween_property(card, "modulate:a", 1.0, 0.14)
+
+
+# --- actions ---
 
 ## Fetches today's daily run and this player's attempt, then redraws.
 func _fetch_daily() -> void:
@@ -278,34 +410,15 @@ func _start_daily(ranked: bool) -> void:
 	start.emit()
 
 
-## The player's name in the corner: tap it for the profile.
-func _build_account_chip(stage: Control) -> void:
-	var name_text := str(Online.user.get("name", "Offline")) if Online.signed_in() else "Offline"
-	var label := name_text + (" - save your progress" if Online.signed_in() and Online.is_guest() else "")
-	var chip := UiTheme.button(label, func() -> void: _open(ProfileSheet.new()), 10, UiTheme.PANEL_DARK)
-	chip.position = Vector2(RIGHT_X + RIGHT_W - 190, 8)
-	chip.size = Vector2(190, 20)
-	chip.alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	stage.add_child(chip)
-
-
 func _open(sheet: Control) -> void:
 	Feel.play("click")
 	UiTheme.show_sheet(sheet)
 
 
-func _box(parent: Control, border: Color) -> VBoxContainer:
-	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", UiTheme.panel_box(UiTheme.PANEL, border))
-	var inner := VBoxContainer.new()
-	inner.add_theme_constant_override("separation", 2)
-	panel.add_child(inner)
-	parent.add_child(panel)
-	return inner
-
-
 func _cycle(step: int) -> void:
 	Feel.play("select")
+	_confirm_new = false
+	_slide = step
 	if mode == "deck":
 		deck_index = posmod(deck_index + step, deck_ids.size())
 	else:
@@ -319,7 +432,14 @@ func _stake(step: int) -> void:
 	_build()
 
 
+## Play; with a tour saved, the first press asks (it would end that tour) and the second starts.
 func _on_start() -> void:
+	if Game.has_saved_run() and not _confirm_new:
+		Feel.play("click")
+		_confirm_new = true
+		_build()
+		return
+	_confirm_new = false
 	Feel.play("play")
 	if mode == "deck":
 		Game.new_run(deck_ids[deck_index], stake)
@@ -347,6 +467,13 @@ func _start_seeded(seed_text: String) -> void:
 		Game.new_run(deck_ids[deck_index], stake, "", seed_text, {"seeded": true})
 	else:
 		Game.new_run("", 1, challenge_ids[challenge_index], seed_text, {"seeded": true})
+	start.emit()
+
+
+## A campaign chapter, from the Campaign sheet.
+func _start_chapter(chapter_id: String, deck_id: String) -> void:
+	Feel.play("play")
+	Game.start_chapter(chapter_id, deck_id)
 	start.emit()
 
 

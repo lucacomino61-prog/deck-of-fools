@@ -1,7 +1,8 @@
 class_name HowToPlay
 extends Control
-## The rules in six short steps over a dimmed screen, and a second page for the tour (batch
-## 12): shown on the first run and from the "?" and How to play buttons.
+## The rules in six short steps over a dimmed screen, a second page for the tour (batch 12)
+## and a third for what carries over between runs (batch 13): shown on the first run and
+## from the "?" and How to play buttons.
 
 signal closed
 
@@ -13,7 +14,15 @@ const TOUR_STEPS := [
 	["Lazzi", "Some Jesters are classic duos. Own both, and in the Market a Merge button makes them one card: one slot, both effects, about 1.5x stronger."],
 ]
 
-## The page shown: 0 the basics, 1 the tour.
+const BETWEEN_STEPS := [
+	["Fame and Maestri", "A Jester earns fame in every show it helps win. Stars come at 25, 60 and 120 fame; at 120 it becomes a Maestro for good, about 1.25x stronger in your normal runs and the campaign."],
+	["The Wagon", "Every run pays scudi. Spend them in the Wagon on props (small starting perks), paint, cloths, card backs, and decks or Jesters before they unlock."],
+	["The campaign", "Il Lungo Giro: 16 chapters around Italy, each a full tour ending in its city, each harder. Clear one to unlock the next, and carry one Jester on with you."],
+	["Rival Patrons", "A Patron you beat may come back later in the run for a rematch. The one that ends a run becomes your nemesis and waits for you in the next."],
+	["Fair play", "Maestri, props and nemeses stay out of the daily run, seeded runs and challenges, so those play the same for everyone."],
+]
+
+## The page shown: 0 the basics, 1 the tour, 2 between runs.
 var page := 0
 
 const STEPS := [
@@ -41,18 +50,20 @@ func _build() -> void:
 		if not child is ColorRect:
 			remove_child(child)
 			child.queue_free()
+	var w := UiTheme.wide_width(self, 900.0)
+	var panel_w := minf(w - 40.0, 660.0)
 	var panel := PanelContainer.new()
 	panel.add_theme_stylebox_override("panel", UiTheme.panel_box(UiTheme.PANEL, UiTheme.GOLD.darkened(0.2)))
-	panel.position = Vector2(100, 8)
-	panel.size = Vector2(440, 344)
-	UiTheme.stage(self).add_child(panel)
+	panel.position = Vector2((w - panel_w) / 2.0, 6)
+	panel.size = Vector2(panel_w, 348)
+	UiTheme.wide_stage(self, 900.0).add_child(panel)
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 3)
 	panel.add_child(col)
-	var heading := UiTheme.title("How to play" if page == 0 else "On tour", 20, UiTheme.GOLD)
+	var heading := UiTheme.title(["How to play", "On tour", "Between runs"][page], 20, UiTheme.GOLD)
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(heading)
-	var steps: Array = STEPS if page == 0 else TOUR_STEPS
+	var steps: Array = [STEPS, TOUR_STEPS, BETWEEN_STEPS][page]
 	for i in steps.size():
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 8)
@@ -61,10 +72,10 @@ func _build() -> void:
 		row.add_child(number)
 		var text := VBoxContainer.new()
 		text.add_theme_constant_override("separation", 0)
-		text.add_child(UiTheme.label(steps[i][0], 11, UiTheme.GOLD))
-		var body := UiTheme.label(steps[i][1], 10 if page == 0 else 9)
+		text.add_child(UiTheme.title(steps[i][0], 12, UiTheme.GOLD))
+		var body := UiTheme.label(steps[i][1], 11 if panel_w >= 560.0 else 10)
 		body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		body.custom_minimum_size = Vector2(392, 0)
+		body.custom_minimum_size = Vector2(panel_w - 48.0, 0)
 		text.add_child(body)
 		row.add_child(text)
 		col.add_child(row)
@@ -72,12 +83,16 @@ func _build() -> void:
 	buttons.add_theme_constant_override("separation", 8)
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	col.add_child(buttons)
-	var turn := UiTheme.button("On tour >" if page == 0 else "< The basics", func() -> void:
-		Feel.play("click")
-		page = 1 - page
-		_build(), 12, UiTheme.PANEL_LIGHT)
-	turn.custom_minimum_size = Vector2(120, 0)
-	buttons.add_child(turn)
+	for i in 3:
+		if i == page:
+			continue
+		var to := i
+		var turn := UiTheme.button(["The basics", "On tour", "Between runs"][i], func() -> void:
+			Feel.play("click")
+			page = to
+			_build(), 11, UiTheme.PANEL_LIGHT)
+		turn.custom_minimum_size = Vector2(96, 0)
+		buttons.add_child(turn)
 	var ok := UiTheme.button("Got it", _close, 12, UiTheme.MULT)
 	ok.custom_minimum_size = Vector2(120, 0)
 	buttons.add_child(ok)

@@ -19,6 +19,8 @@ var run_meta: Dictionary = {}
 var recorded := false
 ## True once the player has seen the "you won" screen for this run.
 var win_seen := false
+## The menu opens the campaign when it next appears (after a cleared chapter).
+var open_campaign := false
 
 
 func _ready() -> void:
@@ -46,12 +48,16 @@ func peek_saved_run() -> RunState:
 
 
 ## A new run; the daily run passes its seed and {daily_date, practice}, a seeded run its
-## seed and {seeded}.
+## seed and {seeded}, a campaign chapter {chapter}. Maestri, props and the nemesis come
+## along only in normal runs and the campaign (fair play: batch 13).
 func new_run(deck_id: String, stake: int, challenge_id := "", seed := "", meta := {}) -> void:
 	var deck := deck_id
 	if challenge_id != "":
 		deck = str(ContentDB.get_def(challenge_id).data["deck"])
-	run = RunState.create(seed if seed != "" else random_seed(), deck, stake, challenge_id, profile.locked_cards())
+	var extras := {}
+	if Profile.brings_extras(challenge_id, meta):
+		extras = profile.extras_for(str(meta.get("chapter", "")))
+	run = RunState.create(seed if seed != "" else random_seed(), deck, stake, challenge_id, profile.locked_cards(), extras)
 	run_meta = meta.duplicate()
 	recorded = false
 	win_seen = false
@@ -112,7 +118,7 @@ func finish_run() -> void:
 	if run == null or recorded:
 		return
 	# A seeded run's cards were known in advance, so only its discoveries count.
-	profile.record_run(run, not run_meta.get("seeded", false))
+	profile.record_run(run, not run_meta.get("seeded", false), run_meta.get("gave_up", false))
 	recorded = true
 	_save_json(PROFILE_PATH, profile.to_dict())
 	if FileAccess.file_exists(RUN_PATH):
@@ -149,6 +155,26 @@ func restart() -> void:
 		seed = run.seed_text
 	give_up()
 	new_run(deck, stake, challenge, seed, meta)
+
+
+## A campaign chapter: its stake, and the deck the player picked.
+func start_chapter(chapter_id: String, deck_id: String) -> void:
+	var d := ContentDB.get_def(chapter_id)
+	new_run(deck_id, int(d.data["stake"]), "", "", {"chapter": chapter_id})
+
+
+## Ends a cleared chapter: records the run, then keeps `carry_item` (a Jester or a duo of the
+## troupe) for the next chapter.
+func finish_chapter(carry_item: ItemCard) -> void:
+	finish_run()
+	if carry_item != null and profile.chapters_cleared < CampaignCards.COUNT:
+		profile.carry = {"id": carry_item.def_id, "parts": carry_item.parts.map(func(p: ItemCard) -> String: return p.def_id)}
+	save_profile()
+
+
+func save_profile() -> void:
+	_save_json(PROFILE_PATH, profile.to_dict())
+	changed.emit()
 
 
 ## Whether this device has finished exactly one run so far: the moment to offer an account.

@@ -48,8 +48,8 @@ func _to_shop(run: RunState) -> void:
 
 func test_batch_contents() -> void:
 	ContentPacks.register_all()
-	var patrons := ContentDB.pool("patron")
-	eq(patrons.size(), 28, "28 Patrons")
+	var patrons := ContentDB.pool("patron", func(d: ContentDef) -> bool: return not d.data.get("campaign", false))
+	eq(patrons.size(), 28, "28 Patrons (Messer Grifone is the campaign's own)")
 	for id: String in MIN_TOWN:
 		eq(ContentDB.get_def(id).data.get("min_town"), MIN_TOWN[id], id + " from town")
 	for id: String in FINALES:

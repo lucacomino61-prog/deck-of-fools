@@ -11,19 +11,22 @@ const TABS := [["zanni", "Jesters"], ["lazzo", "Lazzi"], ["tarocchi", "Tarocchi"
 const COLLECTED := ["zanni", "tarocchi", "sign", "omen", "warrant"]
 const KIND_NAMES := {"zanni": "Jester", "tarocchi": "Tarocchi", "sign": "Sign", "omen": "Omen",
 	"warrant": "Warrant", "favor": "Favor", "patron": "Patron", "deck": "Deck", "lazzo": "Lazzo", "city": "City"}
-const COLUMNS := 10
 const ROWS := 3
-const CARD := Vector2(46, 64)
+## Cards as big as three rows allow; as many columns as the sheet's width takes.
+const CARD := Vector2(54, 76)
+const GAP := 8.0
 
 var kind := "zanni"
 var page := 0
 var _grid: GridContainer
+var _columns := 10
 
 
 func _init(start := "zanni") -> void:
 	kind = start
 	title_text = "Collection"
 	panel_size = Vector2(600, 344)
+	wide = true
 
 
 func _build() -> void:
@@ -34,16 +37,17 @@ func _build() -> void:
 			Feel.play("click")
 			kind = t[0]
 			page = 0
-			rebuild(), 9, UiTheme.PANEL_LIGHT.lightened(0.15) if kind == t[0] else UiTheme.PANEL_DARK)
+			rebuild(), 10, UiTheme.GOLD.darkened(0.35) if kind == t[0] else UiTheme.PANEL_DARK)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		tabs.add_child(b)
 	body.add_child(tabs)
 	var defs := ContentDB.pool(kind)
-	var per_page := COLUMNS * ROWS
+	_columns = maxi(8, int((panel_size.x - 12.0 + GAP) / (CARD.x + GAP)))
+	var per_page := _columns * ROWS
 	var pages := maxi(1, ceili(defs.size() / float(per_page)))
 	page = clampi(page, 0, pages - 1)
 	var top := HBoxContainer.new()
-	var count := UiTheme.label(_count_text(defs), 10, UiTheme.GOLD)
+	var count := UiTheme.label(_count_text(defs), 11, UiTheme.GOLD)
 	count.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(count)
 	if pages > 1:
@@ -52,9 +56,9 @@ func _build() -> void:
 		top.add_child(UiTheme.button(">", func() -> void: _turn(1, pages), 10))
 	body.add_child(top)
 	_grid = GridContainer.new()
-	_grid.columns = COLUMNS
-	_grid.add_theme_constant_override("h_separation", 10)
-	_grid.add_theme_constant_override("v_separation", 8)
+	_grid.columns = _columns
+	_grid.add_theme_constant_override("h_separation", int(GAP))
+	_grid.add_theme_constant_override("v_separation", 6)
 	body.add_child(_grid)
 	_fill(defs.slice(page * per_page, (page + 1) * per_page), _grid)
 
@@ -69,6 +73,8 @@ func _count_text(defs: Array) -> String:
 	if not COLLECTED.has(kind):
 		return "%d %s" % [defs.size(), TABS.filter(func(t: Array) -> bool: return t[0] == kind)[0][1]]
 	var found := defs.filter(func(d: ContentDef) -> bool: return _found(d)).size()
+	if kind == "zanni":
+		return "Found %d of %d   -   Maestri: %d of %d" % [found, defs.size(), Game.profile.maestri().size(), defs.size()]
 	return "Found %d of %d" % [found, defs.size()]
 
 
@@ -91,6 +97,10 @@ func _cell(d: ContentDef) -> Control:
 	v.kind = d.kind
 	v.def_id = d.id
 	v.face_down = not _found(d)
+	if d.kind == "zanni":
+		var fame := Game.profile.fame_of(d.id)
+		v.maestro = fame >= Fame.MAESTRO
+		v.stars = Fame.stars(fame)
 	v.tapped.connect(func(_view: CardView) -> void: _details(d))
 	v.long_pressed.connect(func(_view: CardView) -> void: _details(d))
 	return v
@@ -101,6 +111,9 @@ func _details(d: ContentDef) -> void:
 	var big := CardView.new(Vector2(110, 154))
 	big.kind = d.kind
 	big.def_id = d.id
+	if d.kind == "zanni":
+		big.maestro = Game.profile.fame_of(d.id) >= Fame.MAESTRO
+		big.stars = Fame.stars(Game.profile.fame_of(d.id))
 	if not _found(d):
 		big.face_down = true
 		var how := "Find it in a shop or a pack (or own it) to add it to your collection."
@@ -119,6 +132,13 @@ func _details(d: ContentDef) -> void:
 		lines.append("Locked: " + _deck_rule(d.id))
 	if d.kind == "zanni" and Game.profile.badges.has(d.id):
 		lines.append("Won with it up to Stake %d" % int(Game.profile.badges[d.id]))
+	if d.kind == "zanni":
+		lines.append(RunScreen._fame_line(d.id))
+		if Game.profile.fame_of(d.id) >= Fame.MAESTRO:
+			lines.append("As %s: %s" % [Fame.title(d.id, UiTheme.name_of(d.id)), "+%d ducats at each cash-out" % Fame.FLAT_DUCATS if Fame.FLAT.has(d.id) else "its numbers are x1.25"])
+	if d.kind == "patron":
+		for k in [["enter", "Arriving"], ["beaten", "Beaten"], ["gloat", "Winning"], ["revenge", "Back for revenge"]]:
+			lines.append("%s: “%s”" % [k[1], TranslationServer.translate("%s.%s" % [d.id, k[0]])])
 	if d.kind == "lazzo":
 		var parts: Array = d.data["parts"]
 		lines.append("Merge %s and %s in the Market. It takes one slot and does both their effects, about 1.5x stronger." % [UiTheme.name_of(parts[0]), UiTheme.name_of(parts[1])])

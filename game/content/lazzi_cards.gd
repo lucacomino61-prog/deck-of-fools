@@ -87,7 +87,7 @@ static func _fan_hooks() -> Dictionary:
 		for v: Variant in _fan(run, item, "payout", [], false):
 			if v != null:
 				total += int(v)
-		return roundi(total * SCALE)
+		return roundi(total * scale_of(run, item))
 	h["modify_stat"] = func(run: RunState, item: ItemCard, name: String, value: int) -> int:
 		for part in item.parts:
 			var d := part.def()
@@ -108,16 +108,26 @@ static func _fan_hooks() -> Dictionary:
 	return h
 
 
+## How much a duo grows its Jesters: 1.5, or 1.75 when both are Maestri (batch 13).
+static func scale_of(run: RunState, duo: ItemCard) -> float:
+	if not duo.parts.is_empty() and duo.parts.all(func(p: ItemCard) -> bool: return run.maestri.has(p.def_id)):
+		return Fame.DUO_SCALE
+	return SCALE
+
+
 ## Fires `hook` on each Jester inside the duo, with its numbers grown (`grow`) and its
 ## scoring events labelled as the duo's. Ducats a run hook hands out directly grow too.
 ## Returns each Jester's answer.
 static func _fan(subject: Object, duo: ItemCard, hook: String, extra: Array, grow := true) -> Array:
 	var run: RunState = subject if subject is RunState else (subject as ScoreContext).run
+	var scale := scale_of(run, duo)
 	var outer_scale := run.duo_scale
 	var outer_label := run._copy_label
+	var outer_in_duo := run._in_duo
 	var ducats_before := run.ducats
 	if grow:
-		run.duo_scale = SCALE
+		run.duo_scale = scale
+	run._in_duo = true
 	if outer_label == "":
 		run._copy_label = "zanni:%s#%d" % [duo.def_id, run.position_of(duo)]
 	var answers := []
@@ -125,6 +135,7 @@ static func _fan(subject: Object, duo: ItemCard, hook: String, extra: Array, gro
 		answers.append(run.fire_item(part, hook, subject, extra))
 	run.duo_scale = outer_scale
 	run._copy_label = outer_label
+	run._in_duo = outer_in_duo
 	if grow and subject is RunState and run.ducats != ducats_before:
-		run.ducats += roundi((run.ducats - ducats_before) * (SCALE - 1.0))
+		run.ducats += roundi((run.ducats - ducats_before) * (scale - 1.0))
 	return answers

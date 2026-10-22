@@ -37,13 +37,22 @@ func _ready() -> void:
 	Feel.prepare_audio()
 	UiTheme.sheet_host = self
 	Online.conflict.connect(func(cloud: Dictionary) -> void: UiTheme.show_sheet(ConflictSheet.new(cloud)))
-	_show_menu()
 	if OS.has_feature("preview"):
 		# Only the "Web preview" export has this tag: it opens the screen named in ?screen=.
+		_show_menu()
 		var preview: GDScript = load("res://tests/preview.gd")
 		preview.open(self, preview.requested_screen())
 	else:
+		_show_title()
 		Online.start()
+
+
+## The poster with Enter, the first thing the game shows; then the menu.
+func _show_title() -> void:
+	_clear()
+	var title := TitleScreen.new()
+	screens.add_child(title)
+	title.entered.connect(_show_menu)
 
 
 func _show_menu() -> void:

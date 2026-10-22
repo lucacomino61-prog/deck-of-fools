@@ -43,8 +43,9 @@ func _initialize() -> void:
 			deck = str(ContentDB.get_def(challenge).data["deck"])
 		var stake := 1 + bot.randi() % stakes
 		var seed_text := "FZ%d-%d" % [bot.seed, n]
-		print("RUN %d %s %s stake %d %s%s" % [n, seed_text, deck, stake, challenge, " rich" if rich else ""])
-		var run := RunState.create(seed_text, deck, stake, challenge)
+		var extras := _random_extras() if challenge == "" and bot.randf() < 0.6 else {}
+		print("RUN %d %s %s stake %d %s%s%s" % [n, seed_text, deck, stake, challenge, " rich" if rich else "", " " + JSON.stringify(extras) if not extras.is_empty() else ""])
+		var run := RunState.create(seed_text, deck, stake, challenge, [], extras)
 		_check(run, "created")
 		_play(run, steps, rich)
 		var end := "won" if run.won else ("lost at %s" % (run.current_patron() if run.show_index == Shows.PATRON else "show %d" % run.show_index) if run.phase == RunState.Phase.LOST else "stopped")
@@ -53,7 +54,7 @@ func _initialize() -> void:
 		if run.won:
 			won += 1
 		if not rich:
-			var again := RunState.replay(seed_text, deck, stake, run.action_log, challenge)
+			var again := RunState.replay(seed_text, deck, stake, run.action_log, challenge, [], extras)
 			if JSON.stringify(again.to_dict()) != JSON.stringify(run.to_dict()):
 				_fail(run, "replay from the log doesn't rebuild the run")
 	var lines := []
@@ -92,6 +93,39 @@ func _play(run: RunState, steps: int, rich: bool) -> void:
 			_check_preview(run)
 
 
+## What a profile might bring (batch 13): Maestri, props, a nemesis, a campaign chapter with
+## a carried Jester or duo, and the rivalry.
+func _random_extras() -> Dictionary:
+	var out := {"rivalry": true}
+	var jesters: Array = ContentDB.pool("zanni").map(func(d: ContentDef) -> String: return d.id)
+	var masters := []
+	for i in bot.randi() % 20:
+		masters.append(jesters[bot.randi() % jesters.size()])
+	if not masters.is_empty():
+		out["maestri"] = masters
+	var props: Array = ContentDB.pool("prop").map(func(d: ContentDef) -> String: return d.id)
+	var carried := []
+	for i in bot.randi() % 3:
+		var p: String = props[bot.randi() % props.size()]
+		if not carried.has(p):
+			carried.append(p)
+	if not carried.is_empty():
+		out["props"] = carried
+	if bot.randf() < 0.3:
+		var patrons := ContentDB.pool("patron")
+		out["nemesis"] = {"patron": patrons[bot.randi() % patrons.size()].id, "town": 1 + bot.randi() % 8}
+	if bot.randf() < 0.35:
+		var chapters := CampaignCards.chapters()
+		out["chapter"] = chapters[bot.randi() % chapters.size()].id
+		if bot.randf() < 0.5:
+			out["carry"] = {"id": jesters[bot.randi() % jesters.size()], "parts": []}
+		elif bot.randf() < 0.5:
+			var duos := ContentDB.pool("lazzo")
+			var duo: ContentDef = duos[bot.randi() % duos.size()]
+			out["carry"] = {"id": duo.id, "parts": duo.data["parts"]}
+	return out
+
+
 ## A random action that makes sense in the current phase (sometimes one that doesn't, to
 ## check refusals stay harmless).
 func _choose(run: RunState, rich: bool, in_shop: int) -> Dictionary:
@@ -104,6 +138,8 @@ func _choose(run: RunState, rich: bool, in_shop: int) -> Dictionary:
 				return {"a": "skip_show"}
 			if r < 0.2:
 				return {"a": "swap_patron"}
+			if r < 0.25:
+				return {"a": "swap_scenario"}
 			return {"a": "select_show", "perform": bot.randf() < 0.5}
 		RunState.Phase.MAP:
 			var roads := run.roads()
@@ -171,6 +207,7 @@ func _nonsense(run: RunState) -> Dictionary:
 		{"a": "pick", "index": -1}, {"a": "reorder_zanni", "order": [0, 0]}, {"a": "cash_out"},
 		{"a": "select_show"}, {"a": "skip_pack"}, {"a": "buy_warrant", "index": 5}, {"a": "nonsense"},
 		{"a": "travel", "index": 9}, {"a": "encore"}, {"a": "bow"}, {"a": "merge", "index": 0, "other": 0},
+		{"a": "swap_scenario"},
 	]
 	if not run.hand.is_empty():
 		var id := run.hand[0].id

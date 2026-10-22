@@ -47,8 +47,10 @@ const TOWN_MOODS := [
 ## How fast the swirl turns on its own (calm), and how much a kick can add on top.
 const SWIRL_SPEED := 0.12
 const MAX_KICK := 2.2
-## The backdrop is drawn at this share of the screen's pixels (Low, Medium, High) and scaled
-## up smoothly: it's soft paint, so it looks the same and costs a fraction.
+## The backdrop's paint is drawn at this share of the screen's pixels (Low, Medium, High) and
+## scaled up smoothly: it's soft paint, so it looks the same and costs a fraction. Its fine
+## detail (seams, sparkles, grain, vignette) is drawn at full resolution on top
+## (shaders/backdrop_detail.gdshader), so the backdrop stays sharp.
 const BACKDROP_SCALE := [0.2, 0.32, 0.5]
 ## Particle bursts at each graphics quality.
 const PARTICLES := [0.4, 0.75, 1.0]
@@ -80,6 +82,8 @@ var _intensity_target := 0.0
 ## shown full-screen.
 var _backdrop: ShaderMaterial
 var _backdrop_view: SubViewport
+## The backdrop's full-resolution detail layer (seams, sparkles, grain, vignette).
+var _detail: ShaderMaterial
 var _mood := "menu"
 var _colours: Array = MOODS["menu"]
 var _mood_tween: Tween
@@ -151,6 +155,7 @@ func _process(scaled_delta: float) -> void:
 	_kick = move_toward(_kick, 0.0, delta * 1.6)
 	_phase += delta * (SWIRL_SPEED + _kick)
 	_backdrop.set_shader_parameter("phase", _phase)
+	_detail.set_shader_parameter("phase", _phase)
 
 
 ## How heated the music is, 0 (calm) to 1 (the drive layer at full): the run screen sets it
@@ -201,6 +206,17 @@ func setup_backdrop(host: Control) -> void:
 	shown.set_anchors_preset(Control.PRESET_FULL_RECT)
 	host.add_child(shown)
 	host.move_child(shown, 0)
+	# The crisp detail goes on top at full resolution; the soft paint below drops its own.
+	_backdrop.set_shader_parameter("seams", 0.0)
+	_backdrop.set_shader_parameter("sparkle", 0.0)
+	_detail = ShaderMaterial.new()
+	_detail.shader = load("res://shaders/backdrop_detail.gdshader")
+	var detail := ColorRect.new()
+	detail.material = _detail
+	detail.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	detail.set_anchors_preset(Control.PRESET_FULL_RECT)
+	host.add_child(detail)
+	host.move_child(detail, 1)
 	get_tree().root.size_changed.connect(_resize_backdrop)
 	_set_colours(_colours)
 	apply_settings()
@@ -220,6 +236,12 @@ func backdrop(rect: ColorRect) -> void:
 	rect.material = null
 
 
+## A table cloth bought in the Wagon (batch 13) as the show backdrop's five tones: its colour
+## from deep to bright, and gold streaking through.
+static func cloth_tones(c: Color) -> Array:
+	return [c.darkened(0.88), c.darkened(0.65), c.darkened(0.35), c.lightened(0.15), Color("f0c860")]
+
+
 ## Lights the backdrop up for a moment: orange on a big ×Mult, gold on a win.
 func flash(colour: Color, strength := 0.35) -> void:
 	if _backdrop == null:
@@ -234,7 +256,8 @@ func flash(colour: Color, strength := 0.35) -> void:
 ## Blends the backdrop to a mood's colours (at once with Reduce motion): "menu", "shop",
 ## "patron", or "show" in the colours of `town`.
 func mood(name: String, town := 1) -> void:
-	var key := name if name != "show" else "show%d" % ((town - 1) % TOWN_MOODS.size())
+	var cloth := str(Game.profile.worn.get("cloth", "")) if name == "show" else ""
+	var key := name if name != "show" else ("show " + cloth if cloth != "" else "show%d" % ((town - 1) % TOWN_MOODS.size()))
 	if key == _mood or not (MOODS.has(name) or name == "show"):
 		return
 	_mood = key
@@ -243,6 +266,8 @@ func mood(name: String, town := 1) -> void:
 		_mood_tween.kill()
 	var from := _colours.duplicate()
 	var to: Array = MOODS[name] if name != "show" else TOWN_MOODS[(town - 1) % TOWN_MOODS.size()]
+	if cloth != "":
+		to = cloth_tones(Game.profile.worn_colour("cloth", Color("17595f")))
 	if Settings.reduce_motion:
 		_set_colours(to)
 		return

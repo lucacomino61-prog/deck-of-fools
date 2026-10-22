@@ -14,5 +14,8 @@ foreach ($preset in $builds.Keys) {
 		$lines
 		throw "export of '$preset' failed"
 	}
+	# The loading page (game\web\shell.html) shows the poster in the game's own font.
+	Copy-Item (Join-Path $project "web\poster.webp") (Join-Path $dir "poster.webp") -Force
+	Copy-Item (Join-Path $project "fonts\outfit-latin.woff2") (Join-Path $dir "outfit.woff2") -Force
 	"exported '$preset' to $($builds[$preset])"
 }

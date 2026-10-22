@@ -15,7 +15,17 @@ func _ready() -> void:
 	var main: Control = load("res://ui/main.tscn").instantiate()
 	add_child(main)
 	await get_tree().process_frame
-	_check_fills(main.screens.get_child(0), "the menu")
+	# The poster comes first; Enter (here the key) opens the menu.
+	var title: Node = main.screens.get_child(0)
+	_check(title is TitleScreen, "the game opens on the poster")
+	_check_fills(title, "the poster")
+	_key(KEY_ENTER)
+	await get_tree().create_timer(0.4).timeout
+	await get_tree().process_frame
+	var menu: Node = main.screens.get_children().filter(func(c: Node) -> bool: return not c.is_queued_for_deletion()).back()
+	_check(menu is MenuScreen, "Enter opens the menu")
+	_check_fills(menu, "the menu")
+	_check(menu.find_children("*", "Button", true, false).any(func(b: Button) -> bool: return b.text == "Play"), "the menu's Play")
 	Game.new_run("d_bergamo", 1)
 	Settings.tutorial_step = 0
 	Settings.speed = 1
@@ -71,6 +81,7 @@ func _ready() -> void:
 	board.refresh()
 	await _map(board)
 	await _pause_menu(board)
+	await _progression(board)
 	Game.new_run("d_bergamo", 1)
 	_check(Game.continue_run(), "a saved run continues")
 	print("UI SMOKE OK")
@@ -223,6 +234,10 @@ func _map(board: RunScreen) -> void:
 	_check(board.selection == {"zone": "city", "index": col}, "a tap picks a city (%s)" % [board.selection])
 	var options: Array = ContentDB.get_def(dest).data.get("options", [])
 	_check(_press_button(board.buttons, "Travel to" if options.is_empty() else UiTheme.name_of(dest)), "a Travel button")
+	# The wagon rolls along the road first (batch 13).
+	_check(board.busy, "the wagon rolls before the troupe arrives")
+	while board.busy:
+		await get_tree().create_timer(0.05).timeout
 	_check(run.phase == RunState.Phase.CHOOSE_SHOW and run.city == dest, "travelled to %s" % dest)
 	_check(_has_text(board.hand_row, "Tonight's Scenario"), "the Scenario on offer shows")
 	_check(_press_button(board.buttons, "Perform the Scenario"), "a Perform button")
@@ -230,6 +245,90 @@ func _map(board: RunScreen) -> void:
 	board.refresh()
 	_check(_has_text(board.middle, "Crowd"), "the crowd's mood shows")
 	run.phase = RunState.Phase.CHOOSE_SHOW
+
+
+## Part 4 (batch 13): the Wagon sells a prop, a paint and a deck; the Campaign sets out on
+## chapter 1; a Maestro wears its frame; a Patron speaks; a cleared chapter keeps the Jester
+## picked to carry on. The profile is put back as it was afterwards.
+func _progression(board: RunScreen) -> void:
+	var kept := Game.profile.to_dict()
+	Game.profile = Profile.new()
+	Game.profile.scudi = 500
+	Game.profile.fame["z_zanni"] = Fame.MAESTRO + 5
+	var wagon := WagonSheet.new()
+	UiTheme.show_sheet(wagon)
+	await get_tree().process_frame
+	_check(_press_button(wagon.body, "Buy 40"), "a prop to buy")
+	await get_tree().process_frame
+	_check(Game.profile.props_owned.size() == 1 and Game.profile.carried.size() == 1, "bought and carried")
+	_check(_press_button(wagon.body, "Wardrobe"), "the Wardrobe tab")
+	await get_tree().process_frame
+	_check(_press_button(wagon.body, "Rosso"), "a paint to try on")
+	await get_tree().process_frame
+	_check(_press_button(wagon.body, "Buy 20"), "a paint to buy")
+	await get_tree().process_frame
+	_check(Game.profile.worn.get("paint", "") == "paint_rosso", "the wagon wears it")
+	_check(_press_button(wagon.body, "Notice board"), "the Notice board tab")
+	await get_tree().process_frame
+	_check(_press_button(wagon.body, "Buy 80"), "a deck to buy early")
+	await get_tree().process_frame
+	_check(Game.profile.bought.size() == 1, "a deck bought")
+	_check(Game.profile.scudi == 500 - 40 - 20 - 80, "paid in scudi (%d left)" % Game.profile.scudi)
+	wagon.close()
+
+	var started := []
+	var campaign := CampaignSheet.new(func(chapter: String, deck: String) -> void:
+		started.append(chapter)
+		Game.start_chapter(chapter, deck))
+	UiTheme.show_sheet(campaign)
+	await get_tree().process_frame
+	_check(_has_text(campaign.body, "Il Biglietto"), "the first chapter shows")
+	_check(_press_button(campaign.body, "Set out"), "a Set out button")
+	await get_tree().process_frame
+	_check(started == ["ch_01"] and Game.run.chapter == "ch_01", "chapter 1 starts")
+	_check(Game.run.is_maestro(ItemCard.make("z_zanni", 2)) and Game.run.props.size() == 1, "with the Maestro and the prop")
+
+	var run := Game.run
+	run.zanni.assign([ItemCard.make("z_zanni", 2), ItemCard.make("z_lampionaio", 3)])
+	board.refresh()
+	await get_tree().process_frame
+	var jester := _view(board.top_row, "zanni", 0)
+	_check(jester != null and jester.maestro, "the Maestro wears its frame")
+	run.show_index = Shows.PATRON
+	_step(board, {"a": "select_show"})
+	await get_tree().process_frame
+	_check(board.stage.get_children().any(func(c: Node) -> bool: return c is SpeechBubble), "the Patron speaks")
+
+	run.won = true
+	run.phase = RunState.Phase.SHOP
+	run.shop = ShopState.new()
+	Game.win_seen = false
+	board.refresh()
+	await get_tree().process_frame
+	_check(_has_text(board.overlay, "Chapter 1 cleared!"), "the chapter's end screen")
+	var second: CardView = null
+	for v in _all_views(board.overlay):
+		if v.def_id == "z_lampionaio":
+			second = v
+	_check(second != null, "the troupe to choose from")
+	if second != null:
+		second.tapped.emit(second)
+		await get_tree().process_frame
+	_check(_press_button(board.overlay, "On to the campaign"), "On to the campaign")
+	_check(Game.profile.chapters_cleared == 1 and Game.profile.carry.get("id", "") == "z_lampionaio", "cleared, carrying the Jester picked")
+	_check(Game.open_campaign, "the menu will open the campaign")
+	Game.open_campaign = false
+	Game.profile = Profile.from_dict(kept)
+	Game.save_profile()
+
+
+func _all_views(node: Node) -> Array:
+	var out := []
+	for child in node.get_children():
+		if child is CardView and not child.is_queued_for_deletion():
+			out.append(child)
+		out.append_array(_all_views(child))
+	return out
 
 
 func _drag(from: Vector2, to: Vector2) -> void:

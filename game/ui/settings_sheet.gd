@@ -13,6 +13,7 @@ extends Sheet
 func _init() -> void:
 	title_text = "Settings"
 	panel_size = Vector2(612, 346)
+	wide = true
 
 
 func _ready() -> void:
@@ -27,7 +28,7 @@ func _build() -> void:
 	columns.add_theme_constant_override("separation", 14)
 	body.add_child(columns)
 	var left := VBoxContainer.new()
-	left.custom_minimum_size = Vector2(292, 0)
+	left.custom_minimum_size = Vector2((panel_size.x - 40.0) / 2.0, 0)
 	left.add_theme_constant_override("separation", 4)
 	columns.add_child(left)
 	var right := VBoxContainer.new()
@@ -69,8 +70,9 @@ func _build() -> void:
 	back_row.add_child(preview)
 	var back_col := VBoxContainer.new()
 	back_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	back_col.add_child(UiTheme.label("Card back: " + Settings.CARD_BACKS[Settings.card_back], 10, UiTheme.MUTED))
-	back_col.add_child(UiTheme.button("Next design", func() -> void: _change(func() -> void: Settings.card_back = (Settings.card_back + 1) % Settings.CARD_BACKS.size())))
+	var worn := CardView.worn_back()
+	back_col.add_child(UiTheme.label("Card back: " + (UiTheme.name_of(worn) if worn != "" else Settings.CARD_BACKS[Settings.card_back]), 10, UiTheme.MUTED))
+	back_col.add_child(UiTheme.button("Next design", func() -> void: _change(_next_back)))
 	back_row.add_child(back_col)
 	right.add_child(back_row)
 	if Settings.tutorial_step < 0:
@@ -138,6 +140,22 @@ func _volume(caption: String, value: float, on: bool, set_value: Callable, toggl
 
 
 ## Applies a change: save, apply, tell the screens, redraw this sheet.
+## The next card back: the six designs, then any bought in the Wagon (batch 13), then round.
+func _next_back() -> void:
+	var owned: Array = WagonCards.COSMETICS["back"].map(func(c: Dictionary) -> String: return c["id"]) \
+		.filter(func(id: String) -> bool: return Game.profile.cosmetics.has(id))
+	var order: Array = range(Settings.CARD_BACKS.size()).map(func(i: int) -> String: return str(i)) + owned
+	var now := CardView.worn_back() if CardView.worn_back() != "" else str(Settings.card_back)
+	var next: String = order[(order.find(now) + 1) % order.size()]
+	if next.is_valid_int():
+		Settings.card_back = int(next)
+		Game.profile.wear("back", "")
+	else:
+		Game.profile.wear("back", next)
+	Game.save_profile()
+	CardArt.clear()
+
+
 func _change(apply: Callable) -> void:
 	apply.call()
 	Settings.save()

@@ -4,9 +4,9 @@
 // it resets at 00:00 UTC, and past it calls fail with code 4006). It calls the REST API with
 // the token `npx wrangler login` saved; run `npx wrangler whoami` first, which renews an
 // expired one.
-//   node tools/art/free.mjs <raw dir> [--only warrant/w_baule,… | --tour] [--jobs 3]
+//   node tools/art/free.mjs <raw dir> [--only warrant/w_baule,… | --tour | --progression] [--jobs 3]
 // --tour paints only batch 12's art (the 10 cities without a deck, the theatre boxes, the
-// map's two textures).
+// map's two textures); --progression batch 13's (Messer Grifone, the Wagon's 7 card backs).
 // Saves <raw dir>/<kind>/<id>.jpg (or .png, by what comes back) and skips ones already there;
 // then tools/art/convert.gd makes the game's art from them.
 // Plain https to one IPv4 address that answers, rather than fetch: from here IPv6 doesn't
@@ -18,14 +18,15 @@ import path from 'node:path';
 import net from 'node:net';
 import dns from 'node:dns/promises';
 import https from 'node:https';
-import { freeBriefs, TOUR_ART } from './prompts.mjs';
+import { freeBriefs, TOUR_ART, PROGRESSION_ART } from './prompts.mjs';
 
 const HOST = 'api.cloudflare.com';
 
 const MODEL = '@cf/black-forest-labs/flux-1-schnell';
 const arg = (name) => { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : null; };
 const dir = process.argv[2];
-const only = arg('--only')?.split(',') ?? (process.argv.includes('--tour') ? TOUR_ART : null);
+const only = arg('--only')?.split(',')
+  ?? (process.argv.includes('--tour') ? TOUR_ART : (process.argv.includes('--progression') ? PROGRESSION_ART : null));
 const jobs = Number(arg('--jobs') || 3);
 if (!dir || dir.startsWith('--')) {
   console.log('usage: node tools/art/free.mjs <raw dir> [--only kind/id,…] [--jobs 3]');

@@ -225,7 +225,9 @@ zanni/
 Luca asked what to add to make the game more unique and picked all 16 ideas. He then chose
 how each should work. They're built in four groups, gameplay first, with a stop after each
 group for him to play. Each group's content goes to him as a card batch before it's coded
-(group 1 is cards/batch-12.md).
+(group 1 is cards/batch-12.md, built; group 2 is cards/batch-13.md, built 2026-10-22:
+Maestro at 120 fame, 1.25×, scudi, full 8-town campaign chapters climbing Stake 1 to 4, one
+Jester carried, rematch 1 in 5, lists kept).
 
 | Group | Feature | His choice |
 |---|---|---|
@@ -249,5 +251,7 @@ group for him to play. Each group's content goes to him as a card batch before i
 
 **Change to §3:** Maestro fame and wagon perks are permanent power, which §3 "Rewards and
 progression" ruled out. Luca decided (2026-10-22): they're on in normal runs and the
-campaign, and off in daily, weekly, duel and ranked runs, so leaderboards stay equal. The
-online parts stay local until he says deploy.
+campaign, and off in daily, weekly, duel and ranked runs, so leaderboards stay equal. As
+built, seeded runs and challenges are off too, and a normal run that used them is sent as
+"assisted" and stays off the best-hand and town boards. The online parts stay local until he
+says deploy.

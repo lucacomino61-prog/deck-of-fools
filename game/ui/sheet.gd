@@ -10,6 +10,9 @@ var title_text := ""
 var panel_size := Vector2(420, 320)
 ## Whether Close is offered (a conflict must be answered).
 var closable := true
+## A wide sheet (lists, grids) grows to the screen's width on a wide phone, so its cards and
+## text can be bigger; panel_size.x is then the width it got.
+var wide := false
 var body: VBoxContainer
 var heading: Label
 
@@ -18,19 +21,23 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	var shade := ColorRect.new()
-	shade.color = Color(0, 0, 0, 0.72)
+	shade.color = Color(0.03, 0.01, 0.05, 0.78)
 	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(shade)
+	var w := UiTheme.wide_width(self, 900.0)
+	if wide:
+		panel_size.x = clampf(w - 20.0, panel_size.x, 880.0)
+		panel_size.y = 352.0
 	var panel := PanelContainer.new()
 	panel.add_theme_stylebox_override("panel", UiTheme.panel_box(UiTheme.PANEL, UiTheme.GOLD.darkened(0.25)))
-	panel.position = (UiTheme.STAGE - panel_size) / 2.0
+	panel.position = (Vector2(w, UiTheme.STAGE.y) - panel_size) / 2.0
 	panel.size = panel_size
-	UiTheme.stage(self).add_child(panel)
+	UiTheme.wide_stage(self, 900.0).add_child(panel)
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 6)
 	panel.add_child(col)
 	var top := HBoxContainer.new()
-	heading = UiTheme.title(title_text, 18, UiTheme.GOLD)
+	heading = UiTheme.title(title_text, 20, UiTheme.GOLD)
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(heading)
 	if closable:
@@ -70,7 +77,7 @@ func close() -> void:
 
 
 ## Wrapped text across the sheet.
-func words(text: String, font_size := 10, colour := UiTheme.TEXT) -> Label:
+func words(text: String, font_size := 11, colour := UiTheme.TEXT) -> Label:
 	var l := UiTheme.label(text, font_size, colour)
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.custom_minimum_size = Vector2(panel_size.x - 24, 0)
@@ -88,10 +95,10 @@ func field(placeholder: String, secret := false) -> LineEdit:
 ## A row with a muted caption on the left and a value on the right.
 func pair(caption: String, value: String, colour := UiTheme.TEXT) -> HBoxContainer:
 	var row := HBoxContainer.new()
-	var key := UiTheme.label(caption, 10, UiTheme.MUTED)
+	var key := UiTheme.label(caption, 11, UiTheme.MUTED)
 	key.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(key)
-	row.add_child(UiTheme.label(value, 10, colour))
+	row.add_child(UiTheme.label(value, 11, colour))
 	return row
 
 

@@ -224,6 +224,25 @@ static func stage(parent: Control) -> Control:
 	return s
 
 
+## A stage as wide as the screen allows (640 up to `max_width`), 360 tall, centred: screens
+## that use a wide phone's extra room lay out on it. `parent` must be in the tree.
+static func wide_stage(parent: Control, max_width := 920.0) -> Control:
+	var w := wide_width(parent, max_width)
+	var s := Control.new()
+	s.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	s.set_anchors_preset(Control.PRESET_CENTER)
+	s.offset_left = -w / 2.0
+	s.offset_right = w / 2.0
+	s.offset_top = -STAGE.y / 2.0
+	s.offset_bottom = STAGE.y / 2.0
+	parent.add_child(s)
+	return s
+
+
+static func wide_width(node: Control, max_width := 920.0) -> float:
+	return clampf(node.get_viewport_rect().size.x - 8.0, STAGE.x, max_width)
+
+
 ## Scores and targets as people read them: 1,234,567, and powers of ten once very large.
 static func number(value: float) -> String:
 	if absf(value) >= 1e11:

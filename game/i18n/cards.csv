@@ -925,3 +925,233 @@ lz_burattini.name,Il Teatro dei Burattini
 lz_burattini.text,Copies the Jester to its right; +15 Points per Jester owned
 lz_primo_arlecchino.name,Il Primo Arlecchino
 lz_primo_arlecchino.text,Each Jester to its left x1.75 Mult and +3 Mult
+pt_grifone.name,"Messer Grifone, l'Impresario"
+pt_grifone.text,"Target x5. After each hand he buys out your rightmost working Jester: it stops working for the show"
+pt_censore.enter,"Kings, Queens, Jacks... indecent. Cover them up."
+pt_censore.beaten,I shall be writing a strongly worded letter.
+pt_censore.gloat,Another show saved from bad taste.
+pt_censore.revenge,I've drafted new rules. Longer ones.
+pt_badessa.enter,No Hearts in my convent. Not one.
+pt_badessa.beaten,"Heaven forgive me, I laughed."
+pt_badessa.gloat,"Pray harder next time, child."
+pt_badessa.revenge,I said a hundred prayers for your failure.
+pt_banchiere.enter,Diamonds? Mine. Read the contract.
+pt_banchiere.beaten,Put it on my account.
+pt_banchiere.gloat,Your troupe is now a write-off.
+pt_banchiere.revenge,"Interest has been accruing, Jester."
+pt_capitano_giustizia.enter,Spades are evidence. Confiscated.
+pt_capitano_giustizia.beaten,Release them. On a technicality.
+pt_capitano_giustizia.gloat,Case closed. Take them away.
+pt_capitano_giustizia.revenge,I never close a case for good.
+pt_guardacaccia.enter,Clubs are poaching tools. Hand them over.
+pt_guardacaccia.beaten,"Slippery as hares, the lot of you."
+pt_guardacaccia.gloat,Bagged a whole troupe today.
+pt_guardacaccia.revenge,I followed your wagon tracks for three towns.
+pt_critico.enter,Do the same trick twice and I'm leaving.
+pt_critico.beaten,...Fine. Three stars. Grudgingly.
+pt_critico.gloat,Derivative. Predictable. Closing night.
+pt_critico.revenge,I came back to see if you'd improved. Doubtful.
+pt_purista.enter,Choose one style. Commit to it.
+pt_purista.beaten,Consistent. I'll allow it.
+pt_purista.gloat,You strayed from the form.
+pt_purista.revenge,Purity demands a second hearing.
+pt_gabelliere.enter,Every card that crosses this stage pays a toll.
+pt_gabelliere.beaten,Keep the change. I insist. Ugh.
+pt_gabelliere.gloat,"Tolls, tariffs, fees. You're bankrupt."
+pt_gabelliere.revenge,"New season, new taxes!"
+pt_avaro.enter,Play your favourite again and your purse is mine.
+pt_avaro.beaten,My money! My beautiful money!
+pt_avaro.gloat,"Mine, mine, all of it mine."
+pt_avaro.revenge,I counted my coins. Some were yours.
+pt_fortezza.enter,These walls have never fallen.
+pt_fortezza.beaten,A breach! Ring the bells!
+pt_fortezza.gloat,Still standing. As always.
+pt_fortezza.revenge,We rebuilt. Thicker.
+pt_spione.enter,I see everything. You'll see a little less.
+pt_spione.beaten,"Didn't see that coming. Embarrassing, for a spy."
+pt_spione.gloat,I knew your hand before you did.
+pt_spione.revenge,I've been watching you since the last town.
+pt_maschera_grigia.enter,"Play blind, as I do."
+pt_maschera_grigia.beaten,"Under this mask, I'm smiling. A little."
+pt_maschera_grigia.gloat,Grey wins. Grey always wins.
+pt_maschera_grigia.revenge,Did you think I'd forget your face?
+pt_gioco_buio.enter,Lights out after the first act.
+pt_gioco_buio.beaten,Who lit a candle?!
+pt_gioco_buio.gloat,"In the dark, everyone's a fool."
+pt_gioco_buio.revenge,The dark is back. So am I.
+pt_marchese.enter,Nobility prefers not to be seen with commoners.
+pt_marchese.beaten,How vulgar. How... entertaining.
+pt_marchese.gloat,"Know your place, Jester."
+pt_marchese.revenge,My family never forgets a slight.
+pt_ciambellano.enter,"Protocol: five cards. No more, no less."
+pt_ciambellano.beaten,Protocol permits applause. Just this once.
+pt_ciambellano.gloat,Improper form. Dismissed.
+pt_ciambellano.revenge,I've amended the protocol. Against you.
+pt_priore.enter,No take-backs in this house.
+pt_priore.beaten,"A small sin, enjoying that."
+pt_priore.gloat,Live with your choices.
+pt_priore.revenge,Penance is due. Yours.
+pt_maggiordomo.enter,"I've taken the liberty of removing a card, sir."
+pt_maggiordomo.beaten,"Very good, sir. Very good indeed."
+pt_maggiordomo.gloat,Shall I fetch your coat?
+pt_maggiordomo.revenge,"I've taken the liberty of returning, sir."
+pt_borsaiolo.enter,Nice cards. Shame if they wandered off.
+pt_borsaiolo.beaten,"Fine, fine. Have your pockets back."
+pt_borsaiolo.gloat,Thanks for the show. And the wallet.
+pt_borsaiolo.revenge,"Didn't I rob you already? Once more, then."
+pt_vescovo.enter,"Pride goes before a fall. Each hand, a little lower."
+pt_vescovo.beaten,Bless you. Begrudgingly.
+pt_vescovo.gloat,"Humility, at last."
+pt_vescovo.revenge,I've come to hear your confession.
+pt_duca.enter,"Half for you, half for the Duchy."
+pt_duca.beaten,Even half of you was too much.
+pt_duca.gloat,The Duchy thanks you for your contribution.
+pt_duca.revenge,The Duchy's appetite has grown.
+pt_siniscalco.enter,Already used? Then you're done.
+pt_siniscalco.beaten,Fresh tricks. I didn't expect that.
+pt_siniscalco.gloat,I've seen all your cards. Boring.
+pt_siniscalco.revenge,I remember every card you've ever played.
+pt_impaziente.enter,"Hurry. Hurry! Three cards, go!"
+pt_impaziente.beaten,"Finally over! ...Wait, I lost?"
+pt_impaziente.gloat,Too slow! Next!
+pt_impaziente.revenge,"Back already? No, I'm back. Hurry!"
+pt_contessa.enter,"One hand, darling. Make it count."
+pt_contessa.beaten,Exquisite. You may kiss the ring.
+pt_contessa.gloat,"One chance, and you missed it."
+pt_contessa.revenge,I'll grant you one more hand. Only one.
+pt_granduca.enter,The whole Carnevale is watching. Impress me.
+pt_granduca.beaten,Magnificent. Venezia is yours tonight.
+pt_granduca.gloat,Tuscany has seen better jugglers.
+pt_granduca.revenge,Grand dukes do not lose twice.
+pt_granduchessa.enter,Let's see who's really in your troupe.
+pt_granduchessa.beaten,Every one of them earned their place.
+pt_granduchessa.gloat,A troupe is only as good as its weakest mask.
+pt_granduchessa.revenge,I've picked my favourite. To silence.
+pt_inquisitore.enter,Confess. Give me one of your Jesters.
+pt_inquisitore.beaten,Absolved. This time.
+pt_inquisitore.gloat,Heresy. All of it.
+pt_inquisitore.revenge,The tribunal has reopened your case.
+pt_cardinale.enter,Let's shuffle the order of things.
+pt_cardinale.beaten,A miracle. Or a very good trick.
+pt_cardinale.gloat,Chaos favours the Church.
+pt_cardinale.revenge,Shall we shuffle again?
+pt_regina.enter,That one. Play that one. I insist.
+pt_regina.beaten,You may keep your head.
+pt_regina.gloat,Disobedience. Exile them.
+pt_regina.revenge,The Queen requests a command performance.
+pt_grifone.enter,Every stage in Italy is mine. This one too.
+pt_grifone.beaten,...Bravo. I never learned how you do it.
+pt_grifone.gloat,"Sold. The whole troupe, for a song."
+pt_grifone.revenge,I bought your last stage. I'll buy this one too.
+p_salvadanaio.name,Il Salvadanaio
+p_salvadanaio.text,Start each run with +2 ducats
+p_lanterna.name,La Lanterna
+p_lanterna.text,The map shows the Patron waiting in every city
+p_copione.name,Il Copione Vecchio
+p_copione.text,+1 hand in the run's first show
+p_baule.name,Il Baule dei Costumi
+p_baule.text,The first shop of the run offers +1 Jester
+p_claque.name,La Claque
+p_claque.text,Every show starts at mood 6 instead of 5
+p_suggeritore.name,Il Suggeritore
+p_suggeritore.text,"Once per town, swap the Scenario for another of the same tier"
+p_cassetta.name,La Cassetta degli Attrezzi
+p_cassetta.text,Start each run with a random Tarocchi
+p_mulo.name,Il Mulo Testardo
+p_mulo.text,The first reroll in each shop costs 1 ducat less
+p_bandiera.name,La Bandiera
+p_bandiera.text,+1 scudo for each Patron beaten
+p_ritratto.name,Il Ritratto del Fondatore
+p_ritratto.text,Start each run with a random common Jester
+ch_01.name,Il Biglietto
+ch_01.text,Scenarios are always tier 1
+ch_01.before,"A torn playbill blows into the wagon: the Doge invites the finest company in Italy to the Carnevale. The rest of the page is missing."
+ch_01.after,"Arlecchino finds the other half under the Censore's chair: ""Apply in person. Messer Grifone, Impresario."""
+ch_02.name,Alla Scala
+ch_02.text,"All tour: targets x1.25, every show +3 ducats (the Milano twist)"
+ch_02.before,"La Scala is booked solid all season, by Grifone's companies."
+ch_02.after,The banker settles up and lets a name slip: Grifone owns every stage from here to Venezia.
+ch_03.name,La Corte dei Savoia
+ch_03.text,All tour: Patrons pay double (the Torino twist)
+ch_03.before,The Savoy court wants a private show. The Chamberlain wants the request in triplicate.
+ch_03.after,"The court pays in gold and gossip: Grifone is buying the Patrons, city by city."
+ch_04.name,Il Porto
+ch_04.text,Start with 0 ducats; all tour cards sell for double (the Genova twist)
+ch_04.before,The port impounds the wagon until the troupe pays its tolls.
+ch_04.after,Brighella sells the costumes twice and buys them back once. The wagon rolls on.
+ch_05.name,Le Mura
+ch_05.text,"All tour: -1 discard, +1 hand (the Lucca twist)"
+ch_05.before,The gates of Lucca are shut for the night. The guard will open them for a laugh.
+ch_05.after,The gates swing open. Someone in a griffin cloak watches from the ramparts.
+ch_06.name,La Bottega
+ch_06.text,Every pack also holds an enhanced playing card
+ch_06.before,The painters of Florence want a show worth painting.
+ch_06.after,The Critic's review is fair. Suspiciously fair. Grifone paid him to be cruel.
+ch_07.name,Il Palio
+ch_07.text,All tour: the first hand of each show to reach half its target pays +5 ducats (the Siena twist)
+ch_07.before,Palio day: the troupe must win the crowd before the horses do.
+ch_07.after,The contrade cheer. Grifone's companies are still three towns ahead.
+ch_08.name,Il Colosseo
+ch_08.text,"All tour: Patron targets x1.5, Patrons pay triple (the Roma twist)"
+ch_08.before,In the Colosseum every show is a duel.
+ch_08.after,The Bishop blesses the troupe and slips them a letter: Grifone never paid his tithe.
+ch_09.name,Il Vesuvio
+ch_09.text,"All tour: after your 2nd hand each show, 2 cards in your draw pile turn to Marble (the Napoli twist)"
+ch_09.before,Vesuvio rumbles. Pulcinella says it's only hungry.
+ch_09.after,"The pickpocket returns everything he stole, and Grifone's purse too."
+ch_10.name,Il Mare
+ch_10.text,"All tour: +1 card in hand, -1 hand"
+ch_10.before,A ship south: the troupe performs on deck to pay the fare.
+ch_10.after,"Land. The butler bows and calls them ""Signori"". A first."
+ch_11.name,L'Opera dei Pupi
+ch_11.text,All tour: Jesters fire right to left (the Palermo twist)
+ch_11.before,The puppeteers of Palermo challenge the troupe: masks against marionettes.
+ch_11.after,"The puppets bow. Their strings, the Marquis admits, lead to Grifone."
+ch_12.name,La Città Ideale
+ch_12.text,All tour: hands of exactly 5 cards x1.5 Mult (the Urbino twist)
+ch_12.before,The ideal city wants an ideal show. Nothing less.
+ch_12.after,"Perfect proportions, perfect applause. Venezia sends a second invitation."
+ch_13.name,La Dotta
+ch_13.text,All tour: each discard grows your hand by 1 for the show (up to +2) (the Bologna twist)
+ch_13.before,The doctors of Bologna argue for an hour over whether comedy is medicine.
+ch_13.after,The Miser pays up. The doctors agree: comedy is medicine. Expensive medicine.
+ch_14.name,Palazzo Te
+ch_14.text,"All tour: the first hand of each show x2, the last x0.5 (the Mantova twist)"
+ch_14.before,The Gonzaga court applauds the first act and yawns through the last.
+ch_14.after,The Countess offers a carriage to Venezia. The troupe keeps the wagon.
+ch_15.name,L'Arena
+ch_15.text,All tour: each scored Heart +3 Mult (the Verona twist). The Patron bans Hearts
+ch_15.before,"In the city of lovers, the Abbess has banned love."
+ch_15.after,The Abbess laughs despite herself. Verona's hearts are free again.
+ch_16.name,Il Carnevale
+ch_16.text,The last Patron is Messer Grifone
+ch_16.before,"Carnevale. Every mask in Italy is here, and the griffin waits on the last stage."
+ch_16.after,"Grifone takes off his mask: just a man who never learned to laugh. The Doge crowns I Folli the Compagnia Reale."
+paint_rosso.name,Rosso Arlecchino
+paint_verde.name,Verde Brighella
+paint_bianco.name,Bianco Pierrot
+paint_nero.name,Nero Dottore
+paint_azzurro.name,Azzurro Laguna
+paint_oro.name,Oro Doge
+trim_lanterns.name,Lanterns
+trim_flags.name,Flags
+trim_awning.name,An awning
+trim_bells.name,Bells
+trim_sail.name,The sail
+cloth_scarlatto.name,Scarlet cloth
+cloth_smeraldo.name,Emerald cloth
+cloth_zaffiro.name,Sapphire cloth
+cloth_ambra.name,Amber cloth
+cloth_viola.name,Violet cloth
+cloth_notte.name,Night cloth
+back_maschere.name,Masks
+back_laguna.name,Laguna
+back_scacchi.name,Chequers
+back_limoni.name,Lemons
+back_stelle.name,Stars
+back_rose.name,Roses
+back_corte.name,La Corte
+curtain_porpora.name,Purple curtains
+curtain_blu.name,Blue curtains
+curtain_verde.name,Green curtains
+curtain_oro.name,Gold curtains

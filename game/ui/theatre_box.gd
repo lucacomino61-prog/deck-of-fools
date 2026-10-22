@@ -102,8 +102,13 @@ func _draw() -> void:
 	draw_rect(Rect2(0, rail_y + 10, w, 1.5), UiTheme.GOLD.darkened(0.15))
 	draw_rect(Rect2(3, rail_y + 14, w - 6, h - rail_y - 18), Color("801a30"))
 	_draw_frame(Rect2(3, rail_y + 14, w - 6, h - rail_y - 18), UiTheme.GOLD.darkened(0.3))
-	# Curtains: a swag on each side and a scalloped valance with fringe.
-	var drape := Color("9a1b2e")
+	_draw_curtains(w, rail_y, Game.profile.worn_colour("curtain", Color("9a1b2e")))
+	_draw_chant(w)
+
+
+## Curtains: a swag on each side and a scalloped valance with fringe, in the colour worn in
+## the Wagon (batch 13).
+func _draw_curtains(w: float, rail_y: float, drape: Color) -> void:
 	draw_colored_polygon(PackedVector2Array([Vector2(0, 0), Vector2(9, 0), Vector2(5, rail_y * 0.6), Vector2(0, rail_y)]), drape)
 	draw_colored_polygon(PackedVector2Array([Vector2(w, 0), Vector2(w - 9, 0), Vector2(w - 5, rail_y * 0.6), Vector2(w, rail_y)]), drape)
 	draw_rect(Rect2(0, 0, w, 9), drape.darkened(0.1))
@@ -111,7 +116,6 @@ func _draw() -> void:
 		var cx := (i + 0.5) * w / 5.0
 		draw_circle(Vector2(cx, 9), w / 10.0, drape.darkened(0.1))
 		draw_circle(Vector2(cx, 11), 1.2, UiTheme.GOLD)
-	_draw_chant(w)
 
 
 ## The painting, cut to the box's shape around the middle and drawn a little larger than the
@@ -133,6 +137,8 @@ func _draw_painted() -> void:
 	var src := Rect2((tex.get_width() - src_w) / 2.0, 0, src_w, tex.get_height())
 	var shift := Vector2(sin(_shake * 40.0) * 2.0 * _shake, -_bob * 3.0)
 	draw_texture_rect_region(tex, Rect2(Vector2(-3, -3) + shift, size + Vector2(6, 6)), src, tint)
+	if str(Game.profile.worn.get("curtain", "")) != "":
+		_draw_curtains(size.x, size.y * 0.66, Game.profile.worn_colour("curtain", Color("9a1b2e")))
 	draw_rect(Rect2(Vector2.ZERO, size), UiTheme.GOLD.darkened(0.3), false, 1.0)
 
 
