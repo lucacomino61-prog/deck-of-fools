@@ -108,7 +108,9 @@ static func card_scale() -> float:
 
 
 static func _system_prefers_less_motion() -> bool:
-	if OS.has_feature("web"):
-		var answer: Variant = JavaScriptBridge.eval("window.matchMedia('(prefers-reduced-motion: reduce)').matches", true)
-		return answer == true
-	return false
+	if not OS.has_feature("web"):
+		return false
+	var answer: Variant = JavaScriptBridge.eval("window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : 0", true)
+	# A number from the page (it arrives as a float): comparing what came back with true gave
+	# null in the release web build, which left Reduce motion unset and broke the title.
+	return (typeof(answer) == TYPE_INT or typeof(answer) == TYPE_FLOAT) and float(answer) == 1.0

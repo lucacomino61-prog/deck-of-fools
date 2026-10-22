@@ -3,11 +3,11 @@ extends Sheet
 ## The troupe's wagon (batch 13): the scudi every run earns, spent on props (small starting
 ## perks, carried one at a time, two once the second slot is bought; off in daily, seeded and
 ## challenge runs), the wardrobe (paint and trims for the wagon, table cloths for the shows,
-## card backs, curtains for the theatre boxes), and the notice board (locked decks, rare
+## card backs, the colour of the flaps between screens), and the notice board (locked decks, rare
 ## Jesters and challenges, bought early). The wagon at the top wears what's chosen.
 
 const TABS := [["props", "Props"], ["wardrobe", "Wardrobe"], ["board", "Notice board"]]
-const SLOTS := [["paint", "Paint"], ["trim", "Trims"], ["cloth", "Table cloth"], ["back", "Card back"], ["curtain", "Curtains"]]
+const SLOTS := [["paint", "Paint"], ["trim", "Trims"], ["cloth", "Table cloth"], ["back", "Card back"], ["curtain", "Flaps"]]
 
 var tab := "props"
 ## The cosmetic picked in the wardrobe (shown on the wagon before it's bought).
@@ -185,7 +185,7 @@ func _is_worn(slot: String, id: String) -> bool:
 	return str(p.worn.get(slot, "")) == id
 
 
-## A cosmetic's short name for its button: the first word of a paint, cloth or curtain.
+## A cosmetic's short name for its button: the first word of a paint, cloth or flaps colour.
 func _short(id: String) -> String:
 	var full := UiTheme.name_of(id)
 	return full.get_slice(" ", 0) if id.begins_with("paint_") or id.begins_with("cloth_") or id.begins_with("curtain_") else full

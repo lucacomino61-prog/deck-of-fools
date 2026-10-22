@@ -11,14 +11,16 @@ const UNLOCK_PRICES := {"deck": 80, "zanni": 50, "challenge": 20}
 
 ## Scudi for a run: each show won, each Scenario performed in full, each Encore hit, and the
 ## run won (5, plus 1 per stake above 1).
+const PER_RUN := 1
 const PER_SHOW := 1
 const PER_SCENARIO := 1
 const PER_ENCORE := 2
 const RUN_WON := 5
 
 ## Cosmetics by slot: {id, price, colour}. Price 0 with "campaign" is a campaign reward only.
-## A wagon wears one paint and any trims it owns; the show screen one cloth; the theatre
-## boxes one curtain; card backs join the six in Settings.
+## A wagon wears one paint and any trims it owns; the show screen one cloth; the flaps
+## between screens (ui/flap_wipe.gd, the "curtain" slot) one colour; card backs join the six in
+## Settings.
 const COSMETICS := {
 	"paint": [
 		{"id": "paint_rosso", "price": 20, "colour": Color(0.78, 0.16, 0.18)},
@@ -102,6 +104,10 @@ static func _stat_add(stat_name: String, amount: int) -> Dictionary:
 ## The scudi a finished run earns, as [{src, v}] (campaign rewards are the profile's).
 static func scudi_for(run: RunState) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
+	# Every run that was played pays something, even one lost in the first show (coming back,
+	# 2026-10-22).
+	if int(run.counters.get("hands_played", 0)) > 0:
+		out.append({"src": "bow", "v": PER_RUN})
 	var shows := int(run.counters.get("shows_won", 0)) * PER_SHOW
 	if shows > 0:
 		out.append({"src": "shows", "v": shows})

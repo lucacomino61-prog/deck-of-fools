@@ -42,6 +42,20 @@ var wagon_seen := false
 ## nemesis: "set" / "beaten" / ""}, for the end screen.
 var last_gains: Dictionary = {}
 
+# Coming back (Luca, 2026-10-22): what the station board greets the player with.
+## The best score of each show, by "stake/town/show": the goal bar's ghost.
+var show_best: Dictionary = {}
+## The days the game was opened (UTC, "YYYY-MM-DD"), the last DAYS_KEPT: the tour diary. A
+## missed day never takes anything away.
+var days: Array[String] = []
+## The welcome-back gift given on a return ({date, scudi, away}), for the board to show.
+var welcome: Dictionary = {}
+
+const WELCOME_SCUDI := 5
+## Days away that bring the gift.
+const WELCOME_AFTER := 3
+const DAYS_KEPT := 120
+
 
 ## Call once when a run ends (won and abandoned, or lost). A run that doesn't `count` (a
 ## seeded one) only adds its discoveries: no feats, wins or losses, fame or scudi.
@@ -99,15 +113,20 @@ func _record_progress(run: RunState, gave_up: bool) -> void:
 
 
 ## What this profile brings to a normal run, or to campaign chapter `chapter_id` (the next one
-## also gets the carried Jester): Maestri, carried props, the nemesis, the Patron rivalry.
-## Daily, seeded and challenge runs get none (Game.new_run).
-func extras_for(chapter_id := "") -> Dictionary:
+## also gets the carried Jester): Maestri, carried props and today's card (a prop that comes
+## free for the day), the nemesis, the Patron rivalry. Daily, seeded and challenge runs get
+## none (Game.new_run).
+func extras_for(chapter_id := "", day_card := "") -> Dictionary:
 	var out := {"rivalry": true}
 	var masters := maestri()
 	if not masters.is_empty():
 		out["maestri"] = masters
-	if not carried.is_empty():
-		out["props"] = carried.duplicate()
+	var props := carried.duplicate()
+	if day_card != "" and not props.has(day_card) and ContentDB.get_def(day_card) != null:
+		props.append(day_card)
+		out["day_card"] = day_card
+	if not props.is_empty():
+		out["props"] = props
 	if not nemesis.is_empty():
 		out["nemesis"] = nemesis.duplicate()
 	var chapter_def := ContentDB.get_def(chapter_id)
@@ -132,6 +151,76 @@ func maestri() -> Array:
 
 func fame_of(def_id: String) -> int:
 	return int(fame.get(def_id, 0))
+
+
+## Runs finished so far (won, lost, challenges won).
+func runs_played() -> int:
+	return total_wins + runs_lost + challenges_won.size()
+
+
+# --- coming back ---
+
+## The game was opened on `today`: the diary notes the day, and coming back after
+## WELCOME_AFTER days or more brings a gift of scudi. Returns whether anything changed.
+func visit(today: String) -> bool:
+	if not days.is_empty() and days[-1] == today:
+		return false
+	if not days.is_empty():
+		var away := days_between(days[-1], today)
+		if away >= WELCOME_AFTER:
+			scudi += WELCOME_SCUDI
+			welcome = {"date": today, "scudi": WELCOME_SCUDI, "away": away}
+	days.append(today)
+	if days.size() > DAYS_KEPT:
+		days = days.slice(days.size() - DAYS_KEPT)
+	return true
+
+
+## Days the game was opened in the week up to `today`.
+func days_this_week(today: String) -> int:
+	return days.filter(func(d: String) -> bool:
+		var n := days_between(d, today)
+		return n >= 0 and n < 7).size()
+
+
+static func days_between(from: String, to: String) -> int:
+	return _day_number(to) - _day_number(from)
+
+
+static func _day_number(date: String) -> int:
+	var p := date.split("-")
+	if p.size() != 3:
+		return 0
+	return floori(Time.get_unix_time_from_datetime_dict({"year": int(p[0]), "month": int(p[1]), "day": int(p[2])}) / 86400.0)
+
+
+## Today's card: the prop that comes free in every normal and campaign run that day, the same
+## for everyone.
+static func card_of_the_day(today: String) -> String:
+	var ids: Array = ContentDB.pool("prop").map(func(d: ContentDef) -> String: return d.id)
+	if ids.is_empty():
+		return ""
+	ids.sort()
+	return ids[posmod(_day_number(today) * 7 + 3, ids.size())]
+
+
+## A show just ended: its score is kept if it's the best at this stake, town and show.
+## Returns the best before it (0 if none).
+func note_show(run: RunState) -> float:
+	var key := show_key(run)
+	var before := float(show_best.get(key, 0.0))
+	if run.show_score > before:
+		show_best[key] = run.show_score
+	return before
+
+
+## The best score so far for the show `run` is playing.
+func best_for(run: RunState) -> float:
+	return float(show_best.get(show_key(run), 0.0))
+
+
+static func show_key(run: RunState) -> String:
+	return "%d/%d/%d" % [run.stake, run.town, run.show_index]
 
 
 # --- the wagon ---
@@ -283,6 +372,7 @@ func to_dict() -> Dictionary:
 		"carried": carried.duplicate(), "cosmetics": cosmetics.keys(), "worn": worn.duplicate(true),
 		"bought": bought.keys(), "chapters": chapters_cleared, "carry": carry.duplicate(true),
 		"titles": titles.duplicate(), "nemesis": nemesis.duplicate(), "wagon_seen": wagon_seen,
+		"show_best": show_best.duplicate(), "days": days.duplicate(), "welcome": welcome.duplicate(),
 	}
 
 
@@ -322,4 +412,9 @@ static func from_dict(d: Dictionary) -> Profile:
 	if not n.is_empty():
 		p.nemesis = {"patron": str(n["patron"]), "town": int(n["town"])}
 	p.wagon_seen = bool(d.get("wagon_seen", false))
+	for key in d.get("show_best", {}):
+		p.show_best[str(key)] = float(d["show_best"][key])
+	for day in d.get("days", []):
+		p.days.append(str(day))
+	p.welcome = (d.get("welcome", {}) as Dictionary).duplicate()
 	return p

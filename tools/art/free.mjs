@@ -5,8 +5,8 @@
 // the token `npx wrangler login` saved; run `npx wrangler whoami` first, which renews an
 // expired one.
 //   node tools/art/free.mjs <raw dir> [--only warrant/w_baule,… | --tour | --progression] [--jobs 3]
-// --tour paints only batch 12's art (the 10 cities without a deck, the theatre boxes, the
-// map's two textures); --progression batch 13's (Messer Grifone, the Wagon's 7 card backs).
+// --tour paints only batch 12's art (the 10 cities without a deck and the map's two
+// textures); --progression batch 13's (Messer Grifone, the Wagon's 7 card backs).
 // Saves <raw dir>/<kind>/<id>.jpg (or .png, by what comes back) and skips ones already there;
 // then tools/art/convert.gd makes the game's art from them.
 // Plain https to one IPv4 address that answers, rather than fetch: from here IPv6 doesn't

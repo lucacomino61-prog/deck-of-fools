@@ -158,7 +158,7 @@ Stakes still unlock only by winning the stake below, as now.
 | Wagon trims (lanterns, flags, an awning, bells) | 4 | 30 | small painted overlays |
 | Table cloths for the show screen (felt colours) | 6 | 25 | code-drawn |
 | Card backs | 6 | 40 | 6 new paintings |
-| Curtains in the theatre boxes | 4 | 25 | tinted |
+| Flaps between screens (were curtains in the theatre boxes) | 4 | 25 | tinted |
 
 **4. The wagon on the map.** Your wagon (its paint and trims) stands at your city on the Map
 of Italy. When you travel it rolls along the chosen road (about 1.2 s, bumping over the

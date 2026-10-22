@@ -27,6 +27,14 @@ func _ready() -> void:
 	ContentPacks.register_all()
 	TranslationServer.set_locale("en")
 	profile = _load_profile()
+	# The tour diary notes today; coming back after a few days brings a gift.
+	if profile.visit(today()):
+		_save_json(PROFILE_PATH, profile.to_dict())
+
+
+## Today's date (UTC), as the diary, today's card and the daily run count days.
+static func today() -> String:
+	return Time.get_date_string_from_system(true)
 
 
 ## Drop the card callbacks before the engine unloads their scripts, or quitting crashes.
@@ -56,7 +64,9 @@ func new_run(deck_id: String, stake: int, challenge_id := "", seed := "", meta :
 		deck = str(ContentDB.get_def(challenge_id).data["deck"])
 	var extras := {}
 	if Profile.brings_extras(challenge_id, meta):
-		extras = profile.extras_for(str(meta.get("chapter", "")))
+		# Today's card comes along once the player has finished a first run.
+		var card := Profile.card_of_the_day(today()) if profile.runs_played() > 0 else ""
+		extras = profile.extras_for(str(meta.get("chapter", "")), card)
 	run = RunState.create(seed if seed != "" else random_seed(), deck, stake, challenge_id, profile.locked_cards(), extras)
 	run_meta = meta.duplicate()
 	recorded = false
@@ -102,8 +112,13 @@ func adopt_cloud(data: Dictionary) -> void:
 ## Applies an action and saves. `quiet` skips the change signal, for screens that animate
 ## the result first and refresh afterwards.
 func act(action: Dictionary, quiet := false) -> Dictionary:
+	var in_show := run.phase == RunState.Phase.IN_SHOW
 	var result := run.apply(action)
 	if result["ok"]:
+		# A show just ended: its score may be a new best for that show (the goal bar's ghost).
+		if in_show and run.phase != RunState.Phase.IN_SHOW and not run_meta.get("seeded", false):
+			profile.note_show(run)
+			_save_json(PROFILE_PATH, profile.to_dict())
 		if run.phase == RunState.Phase.LOST:
 			finish_run()
 		else:

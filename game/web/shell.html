@@ -3,14 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#1b1026">
+<meta name="theme-color" content="#0e0b12">
 <title>$GODOT_PROJECT_NAME</title>
-<!-- Deck of Fools' loading page: the key art poster with the logo, and a gold progress bar
-     where the game's own title screen (ui/title_screen.gd) puts its Enter button, so the
-     hand-over is seamless. Positions follow the game's stage: 640x360 units scaled to fit
-     the screen (stretch "expand"), kept in sync by --s and --ox below. poster.webp and
-     outfit.woff2 are copied next to this page by tools/export_web.ps1. -->
-<link rel="preload" href="poster.webp" as="image">
+<!-- Deck of Fools' loading page: an Italian station's split-flap departures board. While the
+     game loads, the title clatters and settles letter by letter as the download gets there,
+     the counter on the bottom row flips up to 100%, and the board already greets the player
+     with the lines the game left last time (localStorage "foolsBoard"; a first visit's lines
+     otherwise). When the game is drawing it calls window.foolsBoardReady(): once this board
+     has settled the page goes, and the game's own board (ui/title_screen.gd), drawn cell for
+     cell in the same places underneath, carries on. Every position here is copied from
+     title_screen.gd. Held upright on a phone, a card asks to turn it sideways (and offers
+     full screen, which locks landscape where the browser allows). outfit.woff2 is copied
+     next to this page by tools/export_web.ps1. -->
 <link rel="preload" href="outfit.woff2" as="font" type="font/woff2" crossorigin>
 <style>
 @font-face {
@@ -19,11 +23,16 @@
 	font-weight: 100 900;
 	font-display: block;
 }
-:root { --s: 1px; --ox: 0px; }
+:root {
+	--gold: #f0b84a;
+	--ink: #f3ead8;
+	--muted: #a99bbd;
+	--night: #0e0b12;
+}
 html, body, #canvas { margin: 0; padding: 0; border: 0; }
 body {
-	color: #f3ead8;
-	background-color: #1b1026;
+	color: var(--ink);
+	background: var(--night);
 	overflow: hidden;
 	touch-action: none;
 	font-family: 'Outfit', system-ui, sans-serif;
@@ -32,89 +41,73 @@ body {
 #canvas { display: block; }
 #canvas:focus { outline: none; }
 
-#status {
-	position: fixed;
-	inset: 0;
-	overflow: hidden;
-	background: #1b1026 url('poster.webp') center / cover no-repeat;
-	transition: opacity 420ms cubic-bezier(0.23, 1, 0.32, 1);
-	z-index: 2;
+/* --- the departures board, on the game's 640x360 stage, scaled to fit --- */
+#status { position: fixed; inset: 0; z-index: 2; background: var(--night); overflow: hidden; }
+#stage { position: absolute; left: 0; top: 0; width: 640px; height: 360px; transform-origin: 0 0; }
+.panel {
+	position: absolute; left: 14px; top: 14px; width: 610px; height: 330px;
+	background: #151119; border: 1px solid #2b2233; border-radius: 12px;
 }
-#status.gone { opacity: 0; pointer-events: none; }
-/* The same scrims the title screen paints: dark behind the logo on the left, and at the foot. */
-#status::before {
-	content: '';
-	position: absolute;
-	inset: 0;
-	background:
-		linear-gradient(90deg, rgba(20, 11, 30, 0.9) 0%, rgba(20, 11, 30, 0.55) 34%, rgba(20, 11, 30, 0) 58%),
-		linear-gradient(0deg, rgba(20, 11, 30, 0.75) 0%, rgba(20, 11, 30, 0) 30%);
-}
-.logo, .tagline, .loader, #status-notice { position: absolute; }
-.logo {
-	left: calc(var(--ox) + 34 * var(--s));
-	top: calc(92 * var(--s));
-	margin: 0;
-	font-weight: 800;
-	font-size: calc(58 * var(--s));
-	line-height: 0.92;
-	letter-spacing: -0.01em;
-	color: #f0b84a;
-	-webkit-text-stroke: calc(4 * var(--s)) #140b1e;
-	paint-order: stroke fill;
-	text-shadow: 0 calc(4 * var(--s)) 0 rgba(0, 0, 0, 0.5);
-}
-.tagline {
-	left: calc(var(--ox) + 36 * var(--s));
-	top: calc(208 * var(--s));
-	margin: 0;
-	font-weight: 600;
-	font-size: calc(14 * var(--s));
-	color: #f3ead8;
-	text-shadow: 0 calc(1 * var(--s)) calc(3 * var(--s)) rgba(0, 0, 0, 0.8);
-}
-.loader {
-	left: calc(var(--ox) + 36 * var(--s));
-	top: calc(246 * var(--s));
-	width: calc(176 * var(--s));
-}
-.bar {
-	height: calc(6 * var(--s));
-	border-radius: calc(3 * var(--s));
-	background: rgba(20, 11, 30, 0.8);
-	box-shadow: inset 0 0 0 calc(1 * var(--s)) rgba(240, 184, 74, 0.35);
-	overflow: hidden;
-}
-.fill {
-	height: 100%;
-	width: 100%;
-	transform-origin: left center;
-	transform: scaleX(0.02);
-	background: linear-gradient(90deg, #c8962a, #f0b84a 70%, #ffe2a0);
-	transition: transform 240ms cubic-bezier(0.23, 1, 0.32, 1);
-}
-.loader p {
-	margin: calc(7 * var(--s)) 0 0;
-	font-weight: 500;
-	font-size: calc(10 * var(--s));
-	color: #a99bbd;
-	font-variant-numeric: tabular-nums;
-}
+.head { position: absolute; top: 22px; font-size: 9px; font-weight: 500; line-height: 1.26; white-space: pre; }
+.rule { position: absolute; left: 34px; top: 110px; width: 572px; height: 1px; background: rgba(240, 184, 74, 0.45); }
+.cell { position: absolute; font-weight: 800; }
+.h, .f { position: absolute; left: 0; right: 0; height: 50%; overflow: hidden; }
+.t { top: 0; background: #231c29; }
+.b { top: 50%; background: #19141e; }
+/* The split runs across the letter, as on a real board. */
+.t::after, .b::after { content: ''; position: absolute; left: 0; right: 0; height: 0.6px; background: #0b080e; }
+.t::after { bottom: 0; }
+.b::after { top: 0; }
+.colon { display: inline-block; animation: blink 2s step-end infinite; }
+@keyframes blink { 50% { opacity: 0.15; } }
+@media (prefers-reduced-motion: reduce) { .colon { animation: none; } }
+.h > i, .f > i { position: absolute; left: 0; right: 0; height: 200%; font-style: normal; text-align: center; white-space: pre; }
+.t > i { top: 0; }
+.b > i { top: -100%; }
+.f { display: none; }
+.f.t { transform-origin: 50% 100%; }
+.f.b { transform-origin: 50% 0; }
 #status-notice {
-	display: none;
-	left: calc(var(--ox) + 36 * var(--s));
-	top: calc(246 * var(--s));
-	max-width: calc(300 * var(--s));
-	padding: calc(8 * var(--s)) calc(10 * var(--s));
-	border-radius: calc(4 * var(--s));
-	background: rgba(91, 57, 67, 0.92);
-	border: 1px solid #9b3943;
-	color: #f3ead8;
-	font-size: calc(10 * var(--s));
-	line-height: 1.35;
+	display: none; position: absolute; left: 50%; top: 70%; transform: translateX(-50%);
+	max-width: min(86vw, 520px); padding: 12px 16px; border-radius: 6px;
+	background: rgba(40, 10, 18, 0.94); border: 1px solid #9b3943;
+	font-size: 15px; line-height: 1.4; text-align: center; white-space: pre-line;
 }
+
+/* --- held upright on a phone --- */
+#turn {
+	display: none; position: fixed; inset: 0; z-index: 10;
+	flex-direction: column; align-items: center; justify-content: center; gap: 22px;
+	padding: 24px; text-align: center;
+	background: radial-gradient(80% 60% at 50% 40%, #241a2c 0%, var(--night) 75%);
+}
+@media (orientation: portrait) and (pointer: coarse) {
+	#turn { display: flex; }
+}
+.phone {
+	width: 58px; height: 98px; border: 3px solid var(--gold); border-radius: 12px; position: relative;
+	animation: turn 2600ms cubic-bezier(0.77, 0, 0.175, 1) infinite;
+}
+.phone::before {
+	content: ''; position: absolute; left: 50%; top: 7px; width: 16px; height: 3px;
+	margin-left: -8px; border-radius: 2px; background: var(--gold);
+}
+@keyframes turn {
+	0%, 18% { transform: rotate(0deg); }
+	48%, 82% { transform: rotate(-90deg); }
+	100% { transform: rotate(0deg); }
+}
+#turn h2 { margin: 0; font-weight: 800; font-size: 26px; color: var(--gold); letter-spacing: -0.01em; }
+#turn p { margin: 0; font-size: 16px; color: rgba(243, 234, 216, 0.8); max-width: 300px; line-height: 1.4; }
+#turn button {
+	display: none; min-height: 48px; padding: 0 26px; border: 0; border-radius: 6px;
+	background: #e0503c; color: var(--ink); font: 700 17px 'Outfit', system-ui, sans-serif;
+	box-shadow: 0 3px 0 #7a2418; transition: transform 120ms ease-out;
+}
+#turn button:active { transform: scale(0.97); }
+#turn.can-lock button { display: block; }
 @media (prefers-reduced-motion: reduce) {
-	#status, .fill { transition: none; }
+	.phone { animation: none; transform: rotate(-90deg); }
 }
 </style>
 $GODOT_HEAD_INCLUDE
@@ -123,14 +116,21 @@ $GODOT_HEAD_INCLUDE
 <canvas id="canvas">Your browser does not support the canvas tag.</canvas>
 <noscript>Deck of Fools needs JavaScript to run.</noscript>
 
-<div id="status">
-	<h1 class="logo">DECK<br>OF FOOLS</h1>
-	<p class="tagline">A troupe of Jesters against the house</p>
-	<div class="loader" id="status-progress">
-		<div class="bar"><div class="fill" id="status-fill"></div></div>
-		<p id="status-text">Raising the curtain</p>
+<div id="status" aria-live="polite">
+	<div id="stage" role="img" aria-label="Deck of Fools is loading">
+		<div class="panel"></div>
+		<div class="head" style="left: 34px; color: var(--muted);">PARTENZE  ·  DEPARTURES</div>
+		<div class="head" id="clock" style="left: 506px; width: 100px; text-align: right; color: var(--gold);"></div>
+		<div class="rule"></div>
 	</div>
 	<div id="status-notice"></div>
+</div>
+
+<div id="turn" role="dialog" aria-label="Turn your phone">
+	<div class="phone" aria-hidden="true"></div>
+	<h2>Turn your phone sideways</h2>
+	<p>Deck of Fools plays in landscape, like a card table.</p>
+	<button id="turn-full" type="button">Play full screen</button>
 </div>
 
 <script src="$GODOT_URL"></script>
@@ -140,58 +140,210 @@ const GODOT_THREADS_ENABLED = $GODOT_THREADS_ENABLED;
 const engine = new Engine(GODOT_CONFIG);
 
 (function () {
-	const root = document.documentElement;
-	const statusOverlay = document.getElementById('status');
-	const statusProgress = document.getElementById('status-progress');
-	const statusFill = document.getElementById('status-fill');
-	const statusText = document.getElementById('status-text');
-	const statusNotice = document.getElementById('status-notice');
+	const status = document.getElementById('status');
+	const stage = document.getElementById('stage');
+	const notice = document.getElementById('status-notice');
+	const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-	// The game's stage: 640x360 units scaled to fit, centred (as Godot's "expand" stretch).
+	// The same numbers as ui/title_screen.gd and ui/flap_cell.gd.
+	const DRUM = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,:!?+-%'/>";
+	const FLIP = 70;
+	const MOST_FLIPS = 6;
+	const TITLE = 'DECK OF FOOLS';
+	const DEPARTING = ' DEPARTING SOON ';
+	const FIRST_LINES = [
+		'WELCOME TO THE TOUR OF ITALY    ',
+		'FIRST   BERGAMO, MATINEE        ',
+		'GOAL    SCORE 300 POINTS        ',
+		'TIP     MAKE POKER HANDS        ',
+	];
+	const GOLD = '#f0b84a';
+	const INK = '#f3ead8';
+
+	// The stage scales to fit and sits centred, as the game's 640x360 stage does.
 	function fitStage() {
-		const s = Math.min(window.innerWidth / 640, window.innerHeight / 360);
-		root.style.setProperty('--s', s + 'px');
-		root.style.setProperty('--ox', ((window.innerWidth - 640 * s) / 2) + 'px');
+		const w = window.innerWidth;
+		const h = window.innerHeight;
+		const s = Math.min(w / 640, h / 360);
+		stage.style.transform = 'translate(' + ((w - 640 * s) / 2) + 'px,' + ((h - 360 * s) / 2) + 'px) scale(' + s + ')';
 	}
 	fitStage();
 	window.addEventListener('resize', fitStage);
+	const now = new Date();
+	// The station clock: its colon blinks on the compositor, alive even while the game starts up.
+	document.getElementById('clock').innerHTML = String(now.getHours()).padStart(2, '0') + '<span class="colon">:</span>' + String(now.getMinutes()).padStart(2, '0');
 
-	function setProgress(current, total) {
-		if (current > 0 && total > 0) {
-			const share = Math.min(1, current / total);
-			statusFill.style.transform = 'scaleX(' + Math.max(0.02, share) + ')';
-			statusText.textContent = 'Raising the curtain  ' + Math.round(share * 100) + '%';
-		}
-	}
-
-	function showNotice(text) {
-		statusProgress.style.display = 'none';
-		statusNotice.textContent = '';
-		text.split('\n').forEach((line) => {
-			statusNotice.appendChild(document.createTextNode(line));
-			statusNotice.appendChild(document.createElement('br'));
+	// --- the cells ---
+	const cells = [];
+	function makeCell(x, y, w, h, size, colour) {
+		const el = document.createElement('div');
+		el.className = 'cell';
+		el.style.cssText = 'left:' + x + 'px;top:' + y + 'px;width:' + w + 'px;height:' + h + 'px;font-size:' + size + 'px;color:' + colour;
+		const parts = ['h t', 'h b', 'f t', 'f b'].map((cls) => {
+			const half = document.createElement('div');
+			half.className = cls;
+			const glyph = document.createElement('i');
+			glyph.style.lineHeight = h + 'px';
+			glyph.textContent = ' ';
+			half.appendChild(glyph);
+			el.appendChild(half);
+			return half;
 		});
-		statusNotice.style.display = 'block';
+		stage.appendChild(el);
+		const cell = { ch: ' ', target: ' ', busy: false, top: parts[0], bottom: parts[1], flapTop: parts[2], flapBottom: parts[3] };
+		cells.push(cell);
+		return cell;
 	}
+	function row(x, y, count, w, h, gap, size, colour) {
+		const out = [];
+		for (let i = 0; i < count; i++) out.push(makeCell(x + i * (w + gap), y, w, h, size, colour));
+		return out;
+	}
+	const titleRow = row(49, 44, TITLE.length, 38, 54, 4, 38, GOLD);
+	const infoRows = [0, 1, 2, 3].map((i) => row(24.75, 122 + i * 32, 32, 17, 26, 1.5, 16, INK));
+	const goRow = row(129, 278, 16, 22, 32, 2, 20, GOLD);
+
+	function show(cell, c) {
+		cell.ch = c;
+		cell.target = c;
+		cell.top.firstChild.textContent = c;
+		cell.bottom.firstChild.textContent = c;
+	}
+	function stepTowards(from, to) {
+		const a = DRUM.indexOf(from);
+		const b = DRUM.indexOf(to);
+		if (a < 0 || b < 0) return to;
+		const n = DRUM.length;
+		const distance = ((b - a) % n + n) % n;
+		if (distance > MOST_FLIPS) return DRUM[((b - MOST_FLIPS + 1) % n + n) % n];
+		return DRUM[(a + 1) % n];
+	}
+	// One flap at a time towards the target: the upper flap falls, then the lower one lands.
+	function pump(cell) {
+		if (cell.busy || cell.ch === cell.target) return;
+		if (calm) { show(cell, cell.target); return; }
+		const old = cell.ch;
+		const next = stepTowards(old, cell.target);
+		cell.busy = true;
+		cell.top.firstChild.textContent = next;
+		cell.bottom.firstChild.textContent = old;
+		cell.flapTop.firstChild.textContent = old;
+		cell.flapBottom.firstChild.textContent = next;
+		cell.flapTop.style.display = 'block';
+		const fall = cell.flapTop.animate([{ transform: 'scaleY(1)' }, { transform: 'scaleY(0)' }], { duration: FLIP / 2, easing: 'ease-in' });
+		fall.onfinish = () => {
+			cell.flapTop.style.display = 'none';
+			cell.flapBottom.style.display = 'block';
+			const land = cell.flapBottom.animate([{ transform: 'scaleY(0)' }, { transform: 'scaleY(1)' }], { duration: FLIP / 2, easing: 'ease-out' });
+			land.onfinish = () => {
+				cell.bottom.firstChild.textContent = next;
+				cell.flapBottom.style.display = 'none';
+				cell.ch = next;
+				cell.busy = false;
+				pump(cell);
+			};
+		};
+	}
+	function flipTo(cell, c, delay) {
+		cell.target = c;
+		if (delay > 0) setTimeout(() => pump(cell), delay); else pump(cell);
+	}
+	function setRow(cells, text, delay, stagger) {
+		const line = (text.toUpperCase() + ' '.repeat(cells.length)).slice(0, cells.length);
+		cells.forEach((cell, i) => flipTo(cell, line[i], (delay || 0) + i * (stagger === undefined ? 18 : stagger)));
+	}
+
+	// The board greets the player with the lines the game left last time.
+	let lines = FIRST_LINES;
+	try {
+		const stored = JSON.parse(localStorage.getItem('foolsBoard') || 'null');
+		if (Array.isArray(stored) && stored.length === 4) lines = stored.map((l) => (String(l) + ' '.repeat(32)).slice(0, 32));
+	} catch (e) { /* private mode: a first visit's lines */ }
+	infoRows.forEach((cells, i) => setRow(cells, lines[i], 350 + i * 120));
+
+	// --- loading: the title settles letter by letter, the counter flips up ---
+	let target = 0;
+	let value = 0;
+	let shownPct = -1;
+	let started = false;
+	let ready = false;
+	const settledAt = TITLE.split('').map((_, i) => 6 + i * (84 / TITLE.length));
+	function pctText(p) { return ' LOADING   ' + String(p).padStart(3, '0') + '% '; }
+	setRow(goRow, pctText(0), 150);
+	// Unsettled title letters clatter through the drum.
+	const clatter = setInterval(() => {
+		titleRow.forEach((cell, i) => {
+			if (value < settledAt[i] && !cell.busy && !calm) flipTo(cell, DRUM[1 + Math.floor(Math.random() * 26)], 0);
+		});
+	}, 140);
+	function tick() {
+		value += (target - value) * 0.1;
+		if (target - value < 0.5) value = target;
+		const p = Math.round(value);
+		if (p !== shownPct) {
+			shownPct = p;
+			setRow(goRow, pctText(p), 0, 0);
+			titleRow.forEach((cell, i) => { if (value >= settledAt[i] && cell.target !== TITLE[i]) flipTo(cell, TITLE[i], 0); });
+		}
+		if (shownPct < 100) requestAnimationFrame(tick); else clearInterval(clatter);
+	}
+	requestAnimationFrame(tick);
+
+	function settled() { return cells.every((c) => !c.busy && c.ch === c.target); }
+	// The page goes once the game is drawing and this board has stopped moving on "Departing
+	// soon": the game's board underneath is the same, so nothing jumps.
+	function leave() {
+		if (!ready) return;
+		if (!settled()) { setTimeout(leave, 40); return; }
+		status.remove();
+	}
+	window.foolsBoardReady = () => { ready = true; leave(); };
 
 	function fail(err) {
 		console.error(err);
-		showNotice(err instanceof Error ? err.message : (typeof err === 'string' ? err : 'Something went wrong while loading.'));
+		notice.textContent = err instanceof Error ? err.message : (typeof err === 'string' ? err : 'Something went wrong while loading.');
+		notice.style.display = 'block';
 	}
+
+	// Full screen locks landscape where the browser allows it (Android); iPhone just rotates.
+	const turn = document.getElementById('turn');
+	if (document.documentElement.requestFullscreen && screen.orientation && screen.orientation.lock) {
+		turn.classList.add('can-lock');
+	}
+	document.getElementById('turn-full').addEventListener('click', () => {
+		document.documentElement.requestFullscreen({ navigationUI: 'hide' })
+			.then(() => screen.orientation.lock('landscape'))
+			.catch(() => {});
+	});
 
 	const missing = Engine.getMissingFeatures({ threads: GODOT_THREADS_ENABLED });
 	if (missing.length !== 0) {
 		fail('This browser can\'t run the game:\n' + missing.join('\n'));
 		return;
 	}
-	engine.startGame({ onProgress: setProgress }).then(() => {
-		statusFill.style.transform = 'scaleX(1)';
-		statusText.textContent = 'Raising the curtain  100%';
-		// The game's title screen draws this same poster; give it a few frames, then fade over.
-		setTimeout(() => {
-			statusOverlay.classList.add('gone');
-			setTimeout(() => statusOverlay.remove(), 600);
-		}, 350);
+	// Godot's own startGame (in index.js), in two steps: download and compile, then start. The
+	// start blocks the page for a few seconds (the game unpacks and sets up), so the board is
+	// brought to rest first, on "Departing soon", and nothing is caught mid-flip.
+	engine.config.update({
+		onProgress: (current, total) => {
+			if (current > 0 && total > 0) target = Math.max(target, Math.min(99, (current / total) * 100));
+		},
+	});
+	const exe = engine.config.executable;
+	const pack = engine.config.mainPack || exe + '.pck';
+	engine.config.args = ['--main-pack', pack].concat(engine.config.args);
+	Promise.all([engine.init(exe), engine.preloadFile(pack, pack)]).then(() => {
+		target = 100;
+		return new Promise((resolve) => {
+			const waitFor = (test, then) => (test() ? then() : setTimeout(() => waitFor(test, then), 40));
+			waitFor(() => shownPct === 100 && settled(), () => {
+				setRow(goRow, DEPARTING, 0, 18);
+				waitFor(settled, () => setTimeout(resolve, 120));
+			});
+		});
+	}).then(() => engine.start()).then(() => {
+		// In case the game never says it's drawing.
+		setTimeout(() => { ready = true; leave(); }, 8000);
 	}, fail);
 }());
 </script>

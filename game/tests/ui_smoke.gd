@@ -20,7 +20,8 @@ func _ready() -> void:
 	_check(title is TitleScreen, "the game opens on the poster")
 	_check_fills(title, "the poster")
 	_key(KEY_ENTER)
-	await get_tree().create_timer(0.4).timeout
+	# The flaps fall shut over the board, then the menu is behind them.
+	await get_tree().create_timer(FlapWipe.FLAP + (FlapWipe.COLS + FlapWipe.ROWS) * FlapWipe.STAGGER + 0.3).timeout
 	await get_tree().process_frame
 	var menu: Node = main.screens.get_children().filter(func(c: Node) -> bool: return not c.is_queued_for_deletion()).back()
 	_check(menu is MenuScreen, "Enter opens the menu")
@@ -176,14 +177,14 @@ func _drag_to_act(board: RunScreen) -> void:
 	_check(not board.drop_hint.visible, "the drop hint is gone after a drop")
 
 
-## The tour (batch 12), part 1: a show won with a happy crowd brings an Encore. The boxes
-## chant, Encore! deals a hand, and a hand that lands doubles the cash-out.
+## The tour (batch 12), part 1: a show won with a happy crowd brings an Encore. The audience
+## chants, Encore! deals a hand, and a hand that lands doubles the cash-out.
 func _encore(board: RunScreen) -> void:
 	var run := Game.run
 	_check(run.phase == RunState.Phase.ENCORE, "a happy crowd demands an Encore (phase %d, mood %d)" % [run.phase, run.mood])
 	if run.phase != RunState.Phase.ENCORE:
 		return
-	_check(board.boxes.all(func(b: TheatreBox) -> bool: return b.visible), "the theatre boxes are there")
+	_check(board.audience.visible, "the audience is there")
 	_check(_has_text(board.middle, "Bis!"), "the Encore panel shows")
 	_check(_press_button(board.buttons, "Encore!"), "an Encore! button")
 	await get_tree().process_frame
@@ -412,8 +413,8 @@ func _pause_menu(board: RunScreen) -> void:
 	_check(board.overlay.mouse_filter == Control.MOUSE_FILTER_STOP, "the end screen shows")
 	_check(_has_text(board.overlay, "Towns reached"), "the end screen lists the run's numbers")
 	_check(_has_text(board.overlay, "You gave up"), "the end screen says why the run ended")
-	_press_button(board.overlay, "New run")
-	_check(Game.run.phase == RunState.Phase.CHOOSE_SHOW, "New run starts another")
+	_press_button(board.overlay, "One more run")
+	_check(Game.run.phase == RunState.Phase.CHOOSE_SHOW, "One more run starts another")
 
 
 # --- input ---

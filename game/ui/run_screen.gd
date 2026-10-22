@@ -110,16 +110,19 @@ var coach: Control
 var drop_hint: Panel
 var drop_words: PanelContainer
 var jester_views: Array = []
-## The two theatre boxes beside the table on tour (batch 12); they stay across refreshes so
-## their reactions can play out.
-var boxes: Array[TheatreBox] = []
+## The audience along the table during a show; it stays across refreshes so its reactions can
+## play out.
+var audience: Audience
+## The show's goal over the table: score towards target, hands and discards left.
+var goal: GoalBar
 ## The Map of Italy while it's on the table (the wagon rolls on it before a travel).
 var _map: MapView
 ## Patron lines already spoken this run ("town:kind"), so each is said once.
 var _said: Dictionary = {}
 ## The Jester picked to carry into the next campaign chapter (its seat).
 var _carry_pick := 0
-const BOX_SIZE := Vector2(60, 100)
+## Where the middle's words start below the goal bar during a show.
+const GOAL_H := 24.0
 
 
 func _ready() -> void:
@@ -128,6 +131,10 @@ func _ready() -> void:
 	Game.changed.connect(refresh)
 	Feel.settings_changed.connect(_rebuild_screen)
 	get_viewport().size_changed.connect(_rebuild_screen)
+	# A new run with today's card says so.
+	var card := str(run.extras.get("day_card", "")) if run != null else ""
+	if card != "" and run.town == 1 and run.show_index == 0 and run.phase == RunState.Phase.CHOOSE_SHOW:
+		message = "Today's card travels with you: %s. %s" % [UiTheme.name_of(card), _sentence(UiTheme.text_of(card))]
 	refresh()
 	if not Settings.seen_help and Settings.tutorial_step < 0:
 		UiTheme.show_sheet(HowToPlay.new())
@@ -169,15 +176,18 @@ func _build_screen() -> void:
 	add_child(stage)
 	_build_side()
 	top_row = _area(Vector2(AREA_X, 4), Vector2(area_w, 80))
-	boxes.clear()
-	for side in 2:
-		var box := TheatreBox.new(side)
-		box.position = Vector2(AREA_X + (0.0 if side == 0 else area_w - BOX_SIZE.x), 86)
-		box.size = BOX_SIZE
-		box.visible = false
-		stage.add_child(box)
-		boxes.append(box)
+	# The audience sits behind the words and cards, its heads just above the hand.
+	audience = Audience.new()
+	audience.position = Vector2(AREA_X, 132)
+	audience.size = Vector2(area_w, 104)
+	audience.visible = false
+	stage.add_child(audience)
 	middle = _area(Vector2(AREA_X, 86), Vector2(area_w, 104))
+	goal = GoalBar.new()
+	goal.position = Vector2(AREA_X, 86)
+	goal.size = Vector2(area_w, 22)
+	goal.visible = false
+	stage.add_child(goal)
 	hand_row = _area(Vector2(AREA_X, 190), Vector2(area_w, 134))
 	buttons = HBoxContainer.new()
 	buttons.position = Vector2(AREA_X, 326)
@@ -361,8 +371,9 @@ func refresh() -> void:
 	_drop_stale_selection()
 	Feel.mood(_mood(), run.town)
 	Feel.intensity(_heat())
-	_update_boxes()
+	_update_audience()
 	_update_side()
+	_update_goal()
 	_build_top()
 	_build_middle()
 	_build_hand()
@@ -379,15 +390,16 @@ func refresh() -> void:
 
 # --- the first-run guide ---
 
-## Each tip: the phase it shows in, its words, and whether it waits for "Got it" (the
-## others move on when the player does what they say).
+## Each tip: the phase it shows in, its words, whether it waits for "Got it" (the others move
+## on when the player does what they say), and what the spotlight lights: "main" (the first
+## button), "play" (Play hand), "hand", "goal" or "middle".
 const COACH := [
-	[RunState.Phase.CHOOSE_SHOW, "Welcome to the tour! Every town has three shows. Score a show's target to win it. Tap Improvise to begin, or Perform the Scenario below for bigger rewards.", false],
-	[RunState.Phase.IN_SHOW, "These are your cards. Tap up to 5 to make a poker hand: a pair, two pair, a flush, a straight... Hold any card to read it.", false],
-	[RunState.Phase.IN_SHOW, "The left panel shows the hand's Points x Mult, and the middle what it will score. Press Play hand (or flick a card up).", false],
-	[RunState.Phase.IN_SHOW, "Score = Points x Mult. Reach the target before your Hands run out. Discard swaps cards for new ones (or flick one down).", true],
-	[RunState.Phase.CASH_OUT, "Show won! Unused hands pay extra ducats. Cash out to visit the Market.", false],
-	[RunState.Phase.SHOP, "In the Market, Jesters stay with you and boost every hand. Tap one and Buy, or drag it up to your Jesters. Then press Next show.", true],
+	[RunState.Phase.CHOOSE_SHOW, "Welcome to the tour! Every town has three shows. Score a show's target to win it. Tap here to begin.", false, "main"],
+	[RunState.Phase.IN_SHOW, "These are your cards. Tap up to 5 to make a poker hand: a pair, two pair, a flush, a straight... Hold any card to read it.", false, "hand"],
+	[RunState.Phase.IN_SHOW, "The table names your hand and what it will score. Press Play hand (or flick a card up).", false, "play"],
+	[RunState.Phase.IN_SHOW, "Score = Points x Mult. Fill this bar to the target before your hands run out. Discard swaps cards for new ones (or flick one down).", true, "goal"],
+	[RunState.Phase.CASH_OUT, "Show won! Unused hands pay extra ducats. Cash out to visit the Market.", false, "main"],
+	[RunState.Phase.SHOP, "In the Market, Jesters stay with you and boost every hand. Tap one and Buy, or drag it up to your Jesters. Then press Next show.", true, "middle"],
 ]
 
 
@@ -418,14 +430,16 @@ func _build_coach() -> void:
 	var s := Settings.tutorial_step
 	if busy or s < 0 or s >= COACH.size() or run.phase != COACH[s][0]:
 		return
+	# The rest of the screen dims around what the tip is about; the tip sits beside it.
+	var light := Spotlight.new(_coach_targets(str(COACH[s][3])))
+	light.size = Vector2(stage_w, 360)
+	coach.add_child(light)
 	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", UiTheme.panel_box(Color(UiTheme.PANEL_DARK, 0.96), UiTheme.GOLD))
-	# Beside the Jesters, not over them (taps go through the box itself, to its buttons only).
+	panel.add_theme_stylebox_override("panel", UiTheme.panel_box(Color(UiTheme.PANEL_DARK, 0.97), UiTheme.GOLD))
+	# Taps go through the box itself, to its buttons only.
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var jesters_end := 0.0 if run.zanni.is_empty() else (jester_views[jester_views.size() - 1] as Control).position.x + jester_card.x + 8.0
-	var room := area_w - 112.0 - jesters_end
-	panel.position = Vector2(AREA_X + 2.0 + (jesters_end if room >= 230.0 else 0.0), 4.0)
-	panel.size = Vector2(minf(room if room >= 230.0 else area_w - 112.0, 420.0), 0)
+	panel.size = Vector2(minf(320.0, area_w - 20.0), 0)
+	light.note = panel
 	var col := VBoxContainer.new()
 	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	col.add_theme_constant_override("separation", 3)
@@ -440,10 +454,32 @@ func _build_coach() -> void:
 	top.add_child(UiTheme.button("Skip tips", func() -> void: _coach_to(-1), 9))
 	col.add_child(top)
 	col.add_child(_wrapped(COACH[s][1], 10, panel.size.x - 16.0))
+	panel.position = Vector2((stage_w - panel.size.x) / 2.0, 4.0)
 	coach.add_child(panel)
 	if not Settings.reduce_motion:
-		panel.modulate.a = 0.0
-		panel.create_tween().tween_property(panel, "modulate:a", 1.0, 0.2)
+		for node: Control in [light, panel]:
+			node.modulate.a = 0.0
+			node.create_tween().tween_property(node, "modulate:a", 1.0, 0.25)
+
+
+## What a tip's spotlight lights (see COACH).
+func _coach_targets(what: String) -> Array[Control]:
+	var out: Array[Control] = []
+	match what:
+		"main", "play":
+			for b in buttons.get_children():
+				if b is Button and not b.is_queued_for_deletion() and (what == "main" or (b as Button).text == "Play hand"):
+					out.append(b)
+					break
+		"hand":
+			for c in hand_row.get_children():
+				if c is CardView and not c.is_queued_for_deletion():
+					out.append(c)
+		"goal":
+			out.append(goal)
+		"middle":
+			out.append(middle)
+	return out
 
 
 func _coach_to(step: int) -> void:
@@ -883,13 +919,44 @@ func _patron_speaks() -> void:
 	bubble.place(Vector2(AREA_X + area_w / 2.0, 92), area_w * 0.7)
 
 
-## The theatre boxes show during a show and its Encore on tour, with the crowd's mood.
-func _update_boxes() -> void:
-	var show_time := run.phase == RunState.Phase.IN_SHOW or run.phase == RunState.Phase.ENCORE
-	for box in boxes:
-		box.visible = run.tour and show_time
-		box.mood = run.mood
-		box.chant("Bis!" if run.phase == RunState.Phase.ENCORE and run.show_counters.get("encore", "") == "offered" else "")
+## The audience watches every show, its Encore and the applause after: on tour it follows
+## the crowd's mood, elsewhere it warms up as the show score nears the target.
+func _update_audience() -> void:
+	var phase := run.phase
+	audience.visible = phase == RunState.Phase.IN_SHOW or phase == RunState.Phase.ENCORE or phase == RunState.Phase.CASH_OUT
+	if run.tour:
+		audience.mood = run.mood
+	elif phase == RunState.Phase.CASH_OUT:
+		audience.mood = 9.0
+	else:
+		audience.mood = 3.0 + 5.0 * clampf(run.show_score / maxf(1.0, run.show_target), 0.0, 1.0)
+	var chant := ""
+	if phase == RunState.Phase.ENCORE and run.show_counters.get("encore", "") == "offered":
+		chant = "Bis!"
+	elif phase == RunState.Phase.CASH_OUT:
+		chant = "Bravo!"
+	audience.chant(chant)
+
+
+## The goal bar shows during a show (and an Encore's hand, against its own target), with what
+## the selected cards would add.
+func _update_goal() -> void:
+	var encore_live: bool = run.phase == RunState.Phase.ENCORE and run.show_counters.get("encore", "") == "live"
+	goal.visible = run.phase == RunState.Phase.IN_SHOW or encore_live
+	if not goal.visible:
+		return
+	var preview := -1.0
+	if not selected_hand.is_empty():
+		var detail := _preview_detail(_selected_ids())
+		var refused: bool = detail.get("events", []).any(func(e: Dictionary) -> bool: return str(e["t"]) == "not_allowed")
+		if not detail.is_empty() and not refused:
+			preview = float(detail["total"])
+	goal.encore = encore_live
+	goal.best = 0.0 if encore_live else Game.profile.best_for(run)
+	if encore_live:
+		goal.set_values(0.0, run.encore_target(), 1, 0, preview)
+	else:
+		goal.set_values(run.show_score, run.show_target, run.hands_left, run.discards_left, preview)
 
 
 ## The crowd's mood as ten pips, gold when they're happy, red when they're not.
@@ -943,8 +1010,8 @@ func _scenario_strip(width: float) -> Control:
 ## The crowd calls for more: what an Encore wins or costs.
 func _middle_encore() -> void:
 	var col := VBoxContainer.new()
-	col.position = Vector2(BOX_SIZE.x + 6.0, 4)
-	col.size = Vector2(area_w - 2.0 * (BOX_SIZE.x + 6.0), 100)
+	col.position = Vector2(40, 4)
+	col.size = Vector2(area_w - 80.0, 100)
 	col.add_theme_constant_override("separation", 4)
 	middle.add_child(col)
 	col.add_child(_centred(UiTheme.title("Bis! An Encore!", 20, UiTheme.GOLD)))
@@ -1076,17 +1143,17 @@ func _favor_text(slot: int) -> String:
 	return text if note == "" else "%s (%s)" % [text, _hand_name(note)]
 
 
-## During a show the middle says what to do next, or names the hand the selected cards make.
+## During a show the middle, under the goal bar, says what to do now: how much is still
+## needed (louder on the last hand), or the hand the selected cards make and whether it's
+## enough. The poker hands chart is one tap away. On tour the Scenario's beats run along the
+## top and the crowd's mood along the bottom.
 func _middle_show_info() -> void:
 	var encore := run.phase == RunState.Phase.ENCORE
-	# On tour the theatre boxes stand at both ends; the Scenario's beats run along the top and
-	# the crowd's mood along the bottom.
-	var inset := BOX_SIZE.x + 6.0 if run.tour else 0.0
-	var width := area_w - 2.0 * inset
+	var width := area_w
 	var col := VBoxContainer.new()
-	col.position = Vector2(inset, 2 if run.tour else 6)
-	col.size = Vector2(width, 100)
-	col.add_theme_constant_override("separation", 3 if run.tour else 6)
+	col.position = Vector2(0, GOAL_H)
+	col.size = Vector2(width, 104.0 - GOAL_H)
+	col.add_theme_constant_override("separation", 2 if run.tour else 4)
 	middle.add_child(col)
 	if run.tour and not encore:
 		var strip := _scenario_strip(width)
@@ -1094,18 +1161,32 @@ func _middle_show_info() -> void:
 			col.add_child(strip)
 	var patron := run.current_patron()
 	if patron != "" and not encore:
-		var l := _wrapped("%s: %s" % [UiTheme.name_of(patron), UiTheme.text_of(patron)], 10, width)
+		var l := _wrapped("%s: %s" % [UiTheme.name_of(patron), UiTheme.text_of(patron)], 9, width)
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		l.add_theme_color_override("font_color", UiTheme.MULT.lightened(0.25))
 		col.add_child(l)
-	var goal := run.encore_target() if encore else run.show_target - run.show_score
+	var need := run.encore_target() if encore else run.show_target - run.show_score
 	var preview := _selected_cards()
 	if preview.is_empty():
-		var ask := "Encore: one hand worth %s" % UiTheme.number(goal) if encore else "Tap up to 5 cards, then press Play hand"
-		col.add_child(_centred(UiTheme.title(ask, 12, UiTheme.GOLD if encore else UiTheme.TEXT)))
+		var last := not encore and run.hands_left <= 1
+		var ask := "Encore: one hand worth %s" % UiTheme.number(need)
+		if not encore:
+			ask = ("Last hand! Score %s" if last else "Score %s more") % UiTheme.number(need)
+		col.add_child(_centred(UiTheme.title(ask, 20, UiTheme.MULT.lightened(0.2) if last else UiTheme.GOLD)))
+		var row := HBoxContainer.new()
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		row.add_theme_constant_override("separation", 8)
+		row.add_child(UiTheme.title("Tap up to %d cards to make a poker hand" % run.stat("max_play"), 10, UiTheme.TEXT))
+		row.add_child(_hands_chart_button())
+		col.add_child(row)
 	else:
 		var hand_type := HandEvaluator.evaluate(preview, run.eval_options()).type
-		col.add_child(_centred(UiTheme.title(_hand_name(hand_type), 22 if run.tour else 24, UiTheme.GOLD)))
+		var head := HBoxContainer.new()
+		head.alignment = BoxContainer.ALIGNMENT_CENTER
+		head.add_theme_constant_override("separation", 8)
+		head.add_child(UiTheme.title(_hand_name(hand_type), 22 if run.tour else 24, UiTheme.GOLD))
+		head.add_child(_hands_chart_button())
+		col.add_child(head)
 		var detail := _preview_detail(_selected_ids())
 		var refused: bool = detail.get("events", []).any(func(e: Dictionary) -> bool: return str(e["t"]) == "not_allowed")
 		if refused:
@@ -1116,14 +1197,22 @@ func _middle_show_info() -> void:
 			col.add_child(l)
 		elif not detail.is_empty():
 			var guess := float(detail["total"])
-			var wins := guess >= goal
-			var line := "Scores about %s%s" % [UiTheme.number(guess), ("  -  the Encore lands!" if encore else "  -  enough to win the show!") if wins else ""]
-			col.add_child(_centred(UiTheme.label(line, 12, UiTheme.GOOD if wins else UiTheme.TEXT)))
+			var wins := guess >= need
+			var line := "Scores about %s  -  %s" % [UiTheme.number(guess), ("the Encore lands!" if encore else "enough to win the show!") if wins else "%s short" % UiTheme.number(need - guess)]
+			col.add_child(_centred(UiTheme.title(line, 12, UiTheme.GOOD if wins else UiTheme.TEXT)))
 	if run.tour and not encore:
 		var spacer := Control.new()
 		spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		col.add_child(spacer)
 		col.add_child(_mood_meter(width))
+
+
+## A small "Poker hands" button: the chart of every hand, its level and its Points x Mult.
+func _hands_chart_button() -> Button:
+	var b := UiTheme.button("Poker hands", func() -> void: _open(RunInfoSheet.new("hands")), 9, UiTheme.PANEL_LIGHT)
+	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	b.custom_minimum_size = Vector2(0, 18)
+	return b
 
 
 ## run.preview(), remembered for the same cards until the run changes (every change is an
@@ -1801,6 +1890,11 @@ func _build_overlay() -> void:
 		col.add_child(_end_stats(r))
 	for line in _gains_lines(r):
 		col.add_child(_centred(UiTheme.label(line[0], 10, line[1])))
+	var next_up := _next_up_lines(r)
+	if not next_up.is_empty():
+		col.add_child(_centred(UiTheme.title("Next up", 11, UiTheme.GOLD)))
+		for line in next_up:
+			col.add_child(_centred(UiTheme.label(line[0], 10, line[1])))
 	var carrying := chapter != null and not lost and int(chapter.data["n"]) < CampaignCards.COUNT
 	if not r.zanni.is_empty():
 		col.add_child(UiTheme.label("Choose a Jester to carry into the next chapter:" if carrying else "Your Jesters", 9, UiTheme.GOLD if carrying else UiTheme.MUTED))
@@ -1836,7 +1930,7 @@ func _build_overlay() -> void:
 	buttons_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	col.add_child(buttons_row)
 	if lost:
-		buttons_row.add_child(UiTheme.button("Practise this daily" if daily else ("Try the chapter again" if chapter != null else "New run"), func() -> void:
+		buttons_row.add_child(UiTheme.button("Practise this daily" if daily else ("Try the chapter again" if chapter != null else "One more run"), func() -> void:
 			Feel.play("play")
 			Game.restart()
 			restart(), 13, UiTheme.MULT))
@@ -1856,6 +1950,8 @@ func _build_overlay() -> void:
 	buttons_row.add_child(UiTheme.button("Main menu", func() -> void:
 		Game.finish_run()
 		back_to_menu.emit(), 12, UiTheme.POINTS))
+	# Centred on the stage, as tall as what it says.
+	panel.position.y = maxf(4.0, (UiTheme.STAGE.y - panel.get_combined_minimum_size().y) / 2.0)
 	if not Settings.reduce_motion:
 		panel.pivot_offset = panel.size / 2.0
 		panel.scale = Vector2(0.9, 0.9)
@@ -1905,6 +2001,36 @@ func _gains_lines(r: RunState) -> Array:
 			parts.append("the title " + str(reward["title"]))
 		if not parts.is_empty():
 			out.append(["Reward: " + ", ".join(parts), UiTheme.GOLD.lightened(0.2)])
+	return out
+
+
+## What's within reach next time, as [text, colour] lines: how close a lost show came, the
+## Jester nearest its next star, the stake a win opens.
+func _next_up_lines(r: RunState) -> Array:
+	var out := []
+	var lost := r.phase == RunState.Phase.LOST
+	if lost and not Game.run_meta.get("gave_up", false) and r.show_score < r.show_target and r.show_score >= r.show_target * 0.6:
+		out.append(["So close: %s more points would have won the %s." % [UiTheme.number(r.show_target - r.show_score), SHOW_NAMES[r.show_index]], UiTheme.GOLD.lightened(0.2)])
+	# Something to look forward to tomorrow.
+	var tomorrow := Time.get_date_string_from_unix_time(int(Time.get_unix_time_from_system()) + 86400)
+	out.append(["Tomorrow: a new card on the board, and the daily run with %s." % UiTheme.name_of(str(Online.daily_setup(tomorrow)["deck"])), UiTheme.MUTED])
+	if Game.run_meta.get("seeded", false) or Game.run_meta.has("daily_date") or r.challenge != "":
+		return out
+	var nearest := ""
+	var gap := 1 << 30
+	for z in r.zanni:
+		var fame := Game.profile.fame_of(z.def_id) + (0 if Game.recorded else int(r.fame.get(z.def_id, 0)))
+		var need := Fame.to_next(fame)
+		if need > 0 and need < gap:
+			gap = need
+			nearest = z.def_id
+	if nearest != "" and Profile.brings_extras(r.challenge, Game.run_meta):
+		out.append(["%s is %d fame from its next star." % [UiTheme.name_of(nearest), gap], UiTheme.TEXT])
+	if r.chapter == "" and r.stake < Unlocks.TOP_STAKE:
+		if r.won:
+			out.append(["Stake %d is open for the %s deck." % [r.stake + 1, UiTheme.name_of(r.deck_id)], UiTheme.GOOD])
+		elif Game.profile.max_stake(r.deck_id) <= r.stake:
+			out.append(["Win this deck on Stake %d to open Stake %d." % [r.stake, r.stake + 1], UiTheme.MUTED])
 	return out
 
 
@@ -2046,6 +2172,8 @@ func _on_play() -> void:
 	var from := _hand_positions()
 	var mood_before := run.mood
 	var encore_hand := run.phase == RunState.Phase.ENCORE
+	var need := run.encore_target() if encore_hand else run.show_target - before
+	var best_before := Game.profile.best_for(run)
 	var result := Game.act({"a": "play", "cards": ids}, true)
 	if not result["ok"]:
 		message = _sentence(str(result["error"]))
@@ -2064,6 +2192,10 @@ func _on_play() -> void:
 	_clear(coach)
 	_build_hand()
 	_build_buttons()
+	goal.preview = -1.0
+	goal.queue_redraw()
+	# The cards left in hand step back, so the played ones and their score have the stage.
+	_step_back_hand(true)
 	var views := {}
 	for child in hand_row.get_children():
 		if not child.is_queued_for_deletion():
@@ -2080,10 +2212,16 @@ func _on_play() -> void:
 		var scores := scoring_ids.has(played[i].id)
 		if not scores:
 			v.modulate = Color(1, 1, 1, 0.6)
-		_fly(v, from.get(played[i].id, Vector2.ZERO), Vector2(left + i * gap, 4 if scores else 14), i * 0.05)
+		_fly(v, from.get(played[i].id, Vector2.ZERO), Vector2(left + i * gap, GOAL_H + (2.0 if scores else 12.0)), i * 0.05)
 		views[played[i].id] = v
 		played_views.append(v)
 	Feel.play("play")
+	# Under the played cards, the hand's name and its Points x Mult as they build up.
+	var plate := ScorePlate.new(_hand_name(str(result["hand"])), need)
+	stage.add_child(plate)
+	if not (result["events"] as Array).is_empty():
+		plate.show_step((result["events"] as Array)[0])
+	plate.place(Vector2(AREA_X + area_w / 2.0, middle.position.y + GOAL_H + 2.0 + hand_card.y + 4.0))
 	await _wait(0.2 + played.size() * 0.05)
 	lbl_hand.text = _hand_name(str(result["hand"]))
 	var events: Array = result["events"]
@@ -2092,6 +2230,9 @@ func _on_play() -> void:
 		var e: Dictionary = events[n]
 		lbl_points.text = UiTheme.number(float(e["points"]))
 		lbl_mult.text = UiTheme.number(float(e["mult"]))
+		plate.show_step(e)
+		if str(e["t"]) == "xmult":
+			audience.react("gasp")
 		if e["t"] == "not_allowed":
 			message = "The Patron doesn't allow that hand: it scores nothing."
 		var target: Control = null
@@ -2106,17 +2247,26 @@ func _on_play() -> void:
 		await _wait(step)
 	var total := float(result["total"])
 	var won_now := run.phase == RunState.Phase.CASH_OUT or (run.phase == RunState.Phase.ENCORE and not encore_hand)
-	await _slam(total, won_now)
+	await _slam(total, won_now or (encore_hand and bool(result.get("encore", false))), plate)
 	for i in played_views.size():
 		_fly_off(played_views[i], i * 0.04)
 	if encore_hand:
 		var landed := bool(result.get("encore", false))
+		await goal.fill_to(total)
+		audience.react("ovation" if landed else "boo")
 		Feel.play("applause" if landed else "lose")
 		await _banner("BIS! CASH-OUT x2" if landed else "THE ENCORE FELL FLAT", UiTheme.GOLD if landed else UiTheme.MULT)
 	else:
-		await _count_up(lbl_score, before, before + total)
-		if run.tour:
-			_crowd_reaction(events, mood_before)
+		_count_up(lbl_score, before, before + total, false)
+		await goal.fill_to(before + total)
+		_crowd_reaction(events, mood_before, total / maxf(1.0, need), won_now)
+		# Past the player's own best in this show: a personal record.
+		if best_before > 0.0 and before < best_before and before + total > best_before:
+			var at := goal.get_global_transform() * goal.fill_point()
+			Feel.float_text("NEW RECORD!", at + Vector2(0, -14), UiTheme.GOLD.lightened(0.3), 16)
+			Feel.burst(at, Color.WHITE, 24)
+			Feel.play("jackpot", 1.2)
+			audience.react("cheer")
 	if won_now and not encore_hand:
 		Feel.play("win")
 		Feel.play("applause")
@@ -2124,11 +2274,13 @@ func _on_play() -> void:
 		Feel.buzz(40)
 		Feel.shake(4.0)
 		Feel.kick(2.0)
-		Feel.burst(lbl_score.get_global_rect().get_center(), UiTheme.GOLD, 40)
+		Feel.burst(goal.get_global_transform() * goal.fill_point(), UiTheme.GOLD, 40)
+		Feel.burst(lbl_score.get_global_rect().get_center(), UiTheme.GOLD, 24)
 		await _banner("SHOW WON!", UiTheme.GOLD)
 	elif run.phase == RunState.Phase.LOST:
 		Feel.play("lose")
 		await _wait(0.4)
+	_step_back_hand(false)
 	scoring = false
 	skipping = false
 	CardArt.hold = false
@@ -2137,18 +2289,38 @@ func _on_play() -> void:
 	Game.changed.emit()
 
 
-## The theatre boxes answer a hand: a Fiasco is booed, a hit beat gasped at, a rising mood
-## cheered, a falling one booed; an emptied house leaves a note.
-func _crowd_reaction(events: Array, mood_before: int) -> void:
+## While a hand scores, the cards left in hand step back and dim; then they return.
+func _step_back_hand(back: bool) -> void:
+	var to_y := 190.0 + (34.0 if back else 0.0)
+	var to_alpha := 0.42 if back else 1.0
+	if Settings.reduce_motion or not back:
+		hand_row.position.y = to_y
+		hand_row.modulate.a = to_alpha
+		return
+	var t := hand_row.create_tween().set_parallel()
+	t.tween_property(hand_row, "position:y", to_y, 0.22).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	t.tween_property(hand_row, "modulate:a", to_alpha, 0.22)
+
+
+## The audience answers a hand: a standing ovation for a show won, a Fiasco booed, a hit beat,
+## a big hand or (on tour) a rising mood cheered, a falling mood booed; on tour an emptied
+## house or an ovation leaves a note. `share` is how much of what was needed the hand scored.
+func _crowd_reaction(events: Array, mood_before: int, share: float, won: bool) -> void:
 	var fiasco := events.any(func(e: Dictionary) -> bool: return e["src"] == "fiasco")
 	var beat := events.any(func(e: Dictionary) -> bool: return e["src"] == "scenario")
-	var kind := "boo" if fiasco else ("gasp" if beat else ("cheer" if run.mood > mood_before or run.ovation else ("boo" if run.mood < mood_before else "")))
-	for box in boxes:
-		box.mood = run.mood
-		if kind != "":
-			box.react(kind)
-		if beat:
-			box.react("cheer")
+	var kind := ""
+	if won:
+		kind = "ovation"
+	elif fiasco:
+		kind = "boo"
+	elif beat or run.ovation or share >= 0.35 or (run.tour and run.mood > mood_before):
+		kind = "cheer"
+	elif run.tour and run.mood < mood_before:
+		kind = "boo"
+	if kind != "":
+		audience.react(kind)
+	if not run.tour:
+		return
 	if fiasco:
 		Feel.play("error")
 		message = "Fiasco! The Scenario is over: that hand scored half."
@@ -2276,15 +2448,17 @@ func _short(amount: float) -> String:
 	return ("%.2f" % amount).rstrip("0")
 
 
-## The hand's total slams down over the played cards, sized and shaken by how big it is,
-## gold when it wins the show, then flies into the show score.
-func _slam(total: float, won: bool) -> void:
+## Points and Mult close in on each other and the hand's total slams down where they met,
+## sized and shaken by how big it is, gold when it wins; then it crashes into the goal bar.
+func _slam(total: float, won: bool, plate: ScorePlate) -> void:
+	await plate.collide()
 	var l := UiTheme.title(UiTheme.number(total), 30, UiTheme.GOLD if won else UiTheme.TEXT)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.size = Vector2(area_w, 44)
-	l.position = Vector2(0, 30)
+	stage.add_child(l)
+	l.global_position = plate.get_global_rect().get_center() - l.size / 2.0
 	l.pivot_offset = l.size / 2.0
-	middle.add_child(l)
+	plate.queue_free()
 	_punch(lbl_points.get_parent())
 	_punch(lbl_mult.get_parent())
 	var share := total / maxf(1.0, float(run.show_target))
@@ -2301,13 +2475,15 @@ func _slam(total: float, won: bool) -> void:
 	l.scale = Vector2(2.6, 2.6)
 	var t := l.create_tween()
 	t.tween_property(l, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	t.tween_interval(0.45)
-	var target := lbl_score.get_global_rect().get_center() - l.size / 2.0
-	t.tween_property(l, "global_position", target, 0.25).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
-	t.parallel().tween_property(l, "scale", Vector2(0.4, 0.4), 0.25)
-	t.parallel().tween_property(l, "modulate:a", 0.0, 0.25)
+	t.tween_interval(0.4)
+	var to := goal.get_global_transform() * goal.fill_point() - l.size / 2.0
+	t.tween_property(l, "global_position", to, 0.24).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	t.parallel().tween_property(l, "scale", Vector2(0.45, 0.45), 0.24)
+	t.parallel().tween_property(l, "modulate:a", 0.0, 0.24).set_delay(0.12)
 	await t.finished
 	l.queue_free()
+	Feel.burst(goal.get_global_transform() * goal.fill_point(), UiTheme.GOLD, 14)
+	Feel.kick(0.5)
 
 
 ## A big word across the table that bounces in, rains confetti and fades: "SHOW WON!".
@@ -2391,9 +2567,9 @@ func _wait(seconds: float) -> void:
 	await get_tree().create_timer(seconds).timeout
 
 
-## Counts a label up to its new value with ticks that rise in pitch (at once with Reduce
-## motion).
-func _count_up(label: Label, from: float, to: float) -> void:
+## Counts a label up to its new value, with ticks that rise in pitch unless `sound` is off (at
+## once with Reduce motion).
+func _count_up(label: Label, from: float, to: float, sound := true) -> void:
 	if Settings.reduce_motion or to <= from:
 		label.text = UiTheme.number(to)
 		return
@@ -2402,7 +2578,7 @@ func _count_up(label: Label, from: float, to: float) -> void:
 	t.tween_method(func(v: float) -> void:
 		label.text = UiTheme.number(floorf(v))
 		var step := int((v - from) / (to - from) * 10.0)
-		if step > ticks[0]:
+		if step > ticks[0] and sound:
 			ticks[0] = step
 			Feel.play("tick", 1.0 + step * 0.06), from, to, 0.45)
 	await t.finished

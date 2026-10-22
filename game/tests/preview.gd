@@ -293,6 +293,17 @@ static func open(main: Control, screen: String) -> void:
 	if screen == "title":
 		main._show_title()
 		return
+	if screen == "board":
+		# The station board for a returning player: a gift, today's card, a nemesis, fame, a
+		# record and the diary.
+		_progress_profile()
+		var p := Game.profile
+		p.total_wins = 2
+		p.welcome = {"date": Game.today(), "scudi": Profile.WELCOME_SCUDI, "away": 4}
+		p.nemesis = {"patron": "pt_badessa", "town": 3}
+		p.show_best = {"1/1/0": 1240.0, "1/2/2": 41200.0}
+		main._show_title()
+		return
 	if screen == "menu_saved":
 		# The menu with a tour in progress and some progress made.
 		_progress_profile()
@@ -502,6 +513,9 @@ static func open(main: Control, screen: String) -> void:
 				Game.win_seen = false
 			Game.changed.emit()
 			return
+	if screen == "ghost":
+		# A best of 240 at this show: the ghost mark sits just short of the target.
+		Game.profile.show_best[Profile.show_key(run)] = 240.0
 	board.selected_hand.assign([run.hand[0].id, run.hand[1].id, run.hand[2].id])
 	board.refresh()
 	if screen == "timing":

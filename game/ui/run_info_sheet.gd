@@ -6,6 +6,21 @@ extends Sheet
 ##   Run: the deck and stake and their rules, this town's Patron, the Warrants, the seed.
 
 const SUIT_ORDER := [PlayingCard.Suit.SPADES, PlayingCard.Suit.HEARTS, PlayingCard.Suit.CLUBS, PlayingCard.Suit.DIAMONDS]
+## What each hand is, with an example, for the chart.
+const WHAT := {
+	"high_card": "No combination: your best card (A)",
+	"pair": "Two of a rank (8 8)",
+	"two_pair": "Two pairs (8 8 K K)",
+	"three_kind": "Three of a rank (7 7 7)",
+	"straight": "Five in a row (5 6 7 8 9)",
+	"flush": "Five of one suit",
+	"full_house": "Three of a rank and a pair (Q Q Q 4 4)",
+	"four_kind": "Four of a rank (J J J J)",
+	"straight_flush": "Five in a row, all one suit",
+	"five_kind": "Five of a rank (needs copied cards)",
+	"flush_house": "A full house, all one suit",
+	"flush_five": "Five of a rank, all one suit",
+}
 const RANKS := [14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2]
 
 var tab := "hands"
@@ -50,9 +65,12 @@ func _build_hands(run: RunState) -> void:
 	for hand_type in HandTable.ORDER:
 		if not run.hand_levels.is_visible(hand_type):
 			continue
-		var name_label := UiTheme.label(TranslationServer.translate("hand." + hand_type), 10, UiTheme.TEXT)
-		name_label.custom_minimum_size = Vector2(150, 0)
-		grid.add_child(name_label)
+		var name_col := VBoxContainer.new()
+		name_col.add_theme_constant_override("separation", -2)
+		name_col.custom_minimum_size = Vector2(210, 0)
+		name_col.add_child(UiTheme.label(TranslationServer.translate("hand." + hand_type), 10, UiTheme.TEXT))
+		name_col.add_child(UiTheme.label(str(WHAT.get(hand_type, "")), 8, UiTheme.MUTED))
+		grid.add_child(name_col)
 		var level := run.hand_levels.level(hand_type)
 		grid.add_child(UiTheme.label("lv.%d" % level, 10, UiTheme.GOLD if level > 1 else UiTheme.TEXT))
 		var pm := HBoxContainer.new()
@@ -61,7 +79,12 @@ func _build_hands(run: RunState) -> void:
 		pm.add_child(UiTheme.label(UiTheme.number(run.hand_levels.mult(hand_type)), 10, UiTheme.MULT.lightened(0.2)))
 		grid.add_child(pm)
 		grid.add_child(UiTheme.label(str(run.hand_levels.times_played(hand_type)), 10, UiTheme.MUTED))
-	body.add_child(grid)
+	# With every hand unlocked and big text, the chart scrolls.
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.add_child(grid)
+	body.add_child(scroll)
 
 
 ## The deck tracker: how many of each card are still in the draw pile.

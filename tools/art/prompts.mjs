@@ -339,8 +339,9 @@ export const CITY_STYLE = 'Painterly digital illustration for a luxury fantasy c
   + 'rich brushwork, fine detail, warm golden light, vibrant jewel colours, tall portrait composition with the landmark in the centre.';
 
 // Batch 12's art (the tour): the 10 cities of the map that have no deck of their own (the
-// others show their deck's painting), the theatre boxes, and two textures the map of Italy
-// is painted with (the coastline itself is drawn from real coordinates).
+// others show their deck's painting) and two textures the map of Italy is painted with (the
+// coastline itself is drawn from real coordinates). The audience along the table is one
+// painting from GPT Image (game/art/crowd/strip.webp), not made here.
 const CITIES = {
   c_milano: 'the Gothic cathedral of Milano with its forest of white marble spires under a golden sky',
   c_torino: 'the royal palace of Torino and the tall spire of the Mole Antonelliana with the snowy Alps behind',
@@ -352,16 +353,6 @@ const CITIES = {
   c_urbino: 'the ducal palace of Urbino with its two slender towers on a green hilltop',
   c_trieste: 'the grand square of Trieste opening onto the sea, waves whipped up by a strong wind',
   c_messina: 'the strait of Messina with swirling whirlpools between the cliffs of Sicily and the mainland, an old lighthouse',
-};
-const BOXES = {
-  left: 'front view of one gilded box in an Italian opera house, red velvet curtains drawn back, a carved gold railing, '
-    + 'three elegant Venetian theatregoers seated inside in carnival masks and powdered wigs, one raising opera glasses, '
-    + 'warm candlelight, the box filling the whole picture',
-  right: 'front view of one gilded box in an Italian opera house, red velvet curtains drawn back, a carved gold railing, '
-    + 'a lady with a feathered fan, a gentleman in a tricorne hat and an old nobleman seated inside, smiling, '
-    + 'warm candlelight, the box filling the whole picture',
-  empty: 'front view of one empty gilded box in an Italian opera house, red velvet curtains, three empty velvet chairs, '
-    + 'a dropped fan and a single rose on the carved gold railing, dim candlelight, the box filling the whole picture',
 };
 const MAP_TEXTURES = {
   land: 'seen from directly above, the surface of an old painted parchment, warm cream and ochre tones, faint painted hills, '
@@ -387,8 +378,6 @@ const WAGON_BACKS = {
 };
 const WAGON_BACK_STYLE = 'Back design of a luxury playing card, perfectly symmetrical and ornamental, an ornate gold border, '
   + 'painted in rich detail, filling the whole picture edge to edge, vibrant jewel colours.';
-const BOX_STYLE = 'Painterly digital illustration for a luxury fantasy card game, Venetian Renaissance theatre, '
-  + 'rich brushwork, fine detail, warm golden light, vibrant jewel colours, tall portrait composition.';
 const TEXTURE_STYLE = 'Painterly texture for the map of a luxury fantasy card game, rich brushwork, subtle and calm.';
 
 export function freeBriefs() {
@@ -397,17 +386,15 @@ export function freeBriefs() {
   for (const [id, scene] of Object.entries(FAVORS)) out[`favor/${id}`] = `${scene}. ${FREE_STYLE}`;
   for (const [id, view] of Object.entries(DECKS)) out[`deck/${id}`] = `${view}. ${CITY_STYLE}`;
   for (const [id, view] of Object.entries(CITIES)) out[`city/${id}`] = `${view}. ${CITY_STYLE}`;
-  for (const [id, scene] of Object.entries(BOXES)) out[`box/${id}`] = `${scene}. ${BOX_STYLE}`;
   for (const [id, look] of Object.entries(MAP_TEXTURES)) out[`map/${id}`] = `${look}. ${TEXTURE_STYLE}`;
   for (const [id, who] of Object.entries(CAMPAIGN_PATRONS)) out[`patron/${id}`] = `${who}. ${FREE_STYLE}`;
   for (const [id, design] of Object.entries(WAGON_BACKS)) out[`back/${id}`] = `${design}. ${WAGON_BACK_STYLE}`;
   return out;
 }
 
-/** The keys of batch 12's art (cities, boxes, map), for free.mjs --tour. */
+/** The keys of batch 12's art (cities, map), for free.mjs --tour. */
 export const TOUR_ART = [
   ...Object.keys(CITIES).map((id) => `city/${id}`),
-  ...Object.keys(BOXES).map((id) => `box/${id}`),
   ...Object.keys(MAP_TEXTURES).map((id) => `map/${id}`),
 ];
 

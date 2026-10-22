@@ -140,6 +140,26 @@ Every card gets its own name, effect text and pixel art, designed with you in ba
 - CRT scanlines with a soft glow.
 - A Reduce motion setting turns off shake, CRT curvature and the moving backdrop.
 
+**Clarity and coming back (2026-10-22):**
+- Held upright, the web page asks to turn the phone (and offers full screen with landscape
+  lock where the browser allows it).
+- The first screen is an Italian split-flap departures board, on the web already while the
+  game loads: the title settles as it downloads, then the board greets the player with what's
+  waiting (a gift after 3+ days away, the tour in progress, today's card, the nemesis, the
+  Jester nearest a star, the best show, days played this week). "All aboard" opens the menu.
+  Screens change behind a wave of falling flaps.
+- During a show: a goal bar over the table (score towards target, a paler stretch for the
+  selected cards, the player's best in that show as a ghost mark, hands and discards), a
+  "what to do now" line, the poker hands chart one tap away, the audience along the table.
+- Scoring: Points x Mult build up on a plate under the played cards, catch fire once enough
+  to win, collide into the total, which crashes into the goal bar.
+- First run: tips with a spotlight on what each is about.
+- End of a run: "Next up" (how close it was, tomorrow's card and daily, the Jester nearest a
+  star, the stake a win opens) and One more run. A played run always pays a scudo.
+- Today's card: a Wagon prop free for the day in normal and campaign runs (a helped run, off
+  the leaderboards like any prop), the same for everyone, after the first finished run.
+- No countdowns, no streaks to lose, no pressure to pay.
+
 **Performance:** 60fps target on mid-range Android; build size kept small.
 
 ## 5. Accounts and online (Cloudflare Workers + D1)
@@ -234,7 +254,7 @@ Jester carried, rematch 1 in 5, lists kept).
 | 1 Gameplay | **Scenarios** (commedia scripts) | Risky: three beats; hitting them pays a lot, missing one gives a penalty |
 | 1 Gameplay | **Map of Italy** | Branching route, real cities, each with a twist and shop flavour |
 | 1 Gameplay | **Lazzi** (Jester duos) | Owning both lets you merge them into one stronger card in one slot |
-| 1 Gameplay | **Live audience** | Painted theatre boxes reacting to every hand |
+| 1 Gameplay | **Live audience** | A painted audience along the table, bobbing with the mood and reacting to every hand (the theatre boxes were dropped 2026-10-22) |
 | 1 Gameplay | **Crowd mood** | Bonus when full and a penalty when empty |
 | 1 Gameplay | **Encore** | Offered when the crowd demands it (high mood) |
 | 2 Progression | **Jester fame** | Permanent across runs: a Jester that reaches 3 stars becomes its Maestro version for good |
