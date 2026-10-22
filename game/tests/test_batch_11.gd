@@ -2,16 +2,26 @@ extends TestCase
 ## Card batch 11: decks, stakes, challenges and unlock rules do what cards/batch-11.md says.
 
 
+## These tests check the deck, stake and challenge rules alone, so the run is taken off the
+## tour (batch 12): no home-city twist, no crowd, no Encore.
 func _deck(deck_id: String, stake_level := 1) -> RunState:
 	ContentPacks.register_all()
 	TestContent.add_test_defs()
-	return RunState.create("B11", deck_id, stake_level)
+	return _classic(RunState.create("B11", deck_id, stake_level))
 
 
 func _challenge(challenge_id: String, seed_text := "B11C") -> RunState:
 	ContentPacks.register_all()
 	TestContent.add_test_defs()
-	return RunState.create(seed_text, ContentDB.get_def(challenge_id).data["deck"], 1, challenge_id)
+	return _classic(RunState.create(seed_text, ContentDB.get_def(challenge_id).data["deck"], 1, challenge_id))
+
+
+func _classic(run: RunState) -> RunState:
+	run.tour = false
+	run.city = ""
+	run.route = []
+	run.scenario = ""
+	return run
 
 
 func _to_shop(run: RunState, ducats := 100) -> void:

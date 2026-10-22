@@ -13,6 +13,16 @@ $lines = & $godot --headless --path $project -s res://tests/run_tests.gd 2>&1 | 
 $code = $LASTEXITCODE
 $lines | ForEach-Object { Write-Output $_ }
 
+# The fuzz bot plays random runs (every deck, stake and challenge) and checks the run still
+# adds up after every action; a longer sweep: -s res://tests/fuzz.gd -- --runs=500 --steps=2200
+$fuzz = & $godot --headless --path $project -s res://tests/fuzz.gd -- --runs=60 --steps=900 --seed=11 2>&1 | ForEach-Object { "$_" }
+$fuzz | Select-String -Pattern "FUZZ (FAIL|DONE)|ERROR" | ForEach-Object { Write-Output $_ }
+if (-not ($fuzz -match "FUZZ DONE .* 0 problems")) {
+    Write-Output "The fuzz bot found problems."
+    $code = 1
+}
+$lines += $fuzz
+
 # The UI smoke test drives the real screens through a run (it needs the Game autoload,
 # so it runs as a scene rather than a -s script).
 $smoke = & $godot --headless --path $project res://tests/ui_smoke.tscn 2>&1 | ForEach-Object { "$_" }

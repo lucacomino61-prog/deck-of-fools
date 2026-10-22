@@ -21,6 +21,9 @@ const BLACK_SUIT := Color("2a2433")
 const GOOD := Color("6cc46a")
 
 static var font: Font
+## Buttons, and titles, scores and card names: the same family, heavier.
+static var button_font: Font
+static var title_font: Font
 ## Where sheets (account, profile, leaderboards…) open: above the screens, so a screen
 ## rebuilding itself doesn't take an open sheet with it. The main scene sets it.
 static var sheet_host: Control
@@ -42,16 +45,25 @@ static func sheet_open() -> bool:
 
 
 static func build() -> Theme:
-	var file: FontFile = load("res://fonts/PixelifySans.ttf")
-	# The game draws at the screen's own resolution (stretch mode canvas_items), so the pixel
-	# font is rasterised large; greyscale edges keep it crisp at odd scales.
-	file.antialiasing = TextServer.FONT_ANTIALIASING_GRAY
-	file.hinting = TextServer.HINTING_NONE
-	file.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
-	font = file
+	# Outfit (SIL OFL), a clean modern sans, drawn at the screen's own resolution (stretch mode
+	# canvas_items) so it's sharp on any phone; Latin Extended (ë, ç…) comes from its second
+	# file. It's a variable font: one file gives every weight. (Distance-field text was tried:
+	# more draw calls and slower on a weak GPU, so no.)
+	var base: FontFile = load("res://fonts/outfit-latin.woff2")
+	var extended: FontFile = load("res://fonts/outfit-latin-ext.woff2")
+	# Letters sit at sub-pixel positions (snapping each to whole pixels left uneven gaps).
+	for f: FontFile in [base, extended]:
+		f.antialiasing = TextServer.FONT_ANTIALIASING_GRAY
+		f.hinting = TextServer.HINTING_NONE
+		f.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_AUTO
+	base.fallbacks = [extended]
+	font = _weight(base, 500)
+	button_font = _weight(base, 600)
+	title_font = _weight(base, 800)
 	var t := Theme.new()
-	t.default_font = file
+	t.default_font = font
 	t.default_font_size = 10
+	t.set_font("font", "Button", button_font)
 	_style_button(t, null, PANEL_LIGHT)
 	t.set_stylebox("focus", "Button", StyleBoxEmpty.new())
 	t.set_color("font_color", "Button", TEXT)
@@ -89,6 +101,14 @@ static func build() -> Theme:
 	t.set_stylebox("grabber_area", "HSlider", filled)
 	t.set_stylebox("grabber_area_highlight", "HSlider", filled)
 	return t
+
+
+## The font at one weight (100 thin to 900 black) of its variable "wght" axis.
+static func _weight(base: Font, weight: int) -> FontVariation:
+	var v := FontVariation.new()
+	v.base_font = base
+	v.variation_opentype = {TextServerManager.get_primary_interface().name_to_tag("wght"): weight}
+	return v
 
 
 static func box(bg: Color, border: Color, radius := 3) -> StyleBoxFlat:
@@ -171,7 +191,8 @@ static func segmented(names: Array, chosen: int, pick: Callable, size := 10) -> 
 ## Display type: a thick dark outline and a drop shadow, readable over the swirling backdrop.
 static func title(text: String, size := 16, color := GOLD) -> Label:
 	var l := label(text, size, color)
-	l.add_theme_constant_override("outline_size", maxi(4, size / 5))
+	l.add_theme_font_override("font", title_font)
+	l.add_theme_constant_override("outline_size", maxi(3, size / 6))
 	l.add_theme_color_override("font_outline_color", OUTLINE)
 	l.add_theme_constant_override("shadow_offset_x", 0)
 	l.add_theme_constant_override("shadow_offset_y", maxi(2, size / 12))

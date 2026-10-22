@@ -12,16 +12,22 @@ func _init() -> void:
 		played[t] = 0
 
 
+## The getters answer 0 for no hand at all ("" while a Jester's value is worked out
+## without a played hand, RunState.jester_now).
 func level(hand_type: String) -> int:
-	return int(levels[hand_type])
+	return int(levels.get(hand_type, 0))
 
 
 func points(hand_type: String) -> float:
+	if not HandTable.BASE.has(hand_type):
+		return 0.0
 	var row: Array = HandTable.BASE[hand_type]
 	return float(row[0] + (level(hand_type) - 1) * row[2])
 
 
 func mult(hand_type: String) -> float:
+	if not HandTable.BASE.has(hand_type):
+		return 0.0
 	var row: Array = HandTable.BASE[hand_type]
 	return float(maxi(1, row[1] + (level(hand_type) - 1) * row[3]))
 
@@ -35,7 +41,7 @@ func mark_played(hand_type: String) -> void:
 
 
 func times_played(hand_type: String) -> int:
-	return int(played[hand_type])
+	return int(played.get(hand_type, 0))
 
 
 ## Secret hands stay hidden until the player has made one.

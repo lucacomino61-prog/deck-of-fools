@@ -2,11 +2,17 @@ extends Node
 ## Opens one screen in a set state, for screenshots.
 ## Web: the "Web preview" export (feature tag "preview") opens /preview/?screen=<name>; see
 ## tools/export_web.ps1 and tools/shoot.mjs. Desktop: godot --path game res://tests/preview.tscn -- --screen=show
-## Screens: menu, settings, help, choose, coach (the first-run guide), coach2 (its tip with
-## cards picked), show, tip (a Jester tapped), detail (a card held), pause, hands, deck (Run
-## info), scoring, shop, end (a lost run), won, gallery1–gallery4 (every Jester, 40 to a
-## page, at shop size), and online, account, profile, leaderboards (these sign in to the
-## local API first). Left out of the real "Web" export.
+## Screens: menu, settings, backs, collection, seed, faces (draws 202 card faces, then logs
+## their memory), help, choose, coach (the first-run guide), coach2 (its tip with cards
+## picked), show (cards picked: preview and Jester badges), contrast (show with four suit
+## colours), notallowed (a Patron refuses the picked hand), tip (a Jester tapped), detail (a
+## card held), pause, hands, deck (Run info), scoring, timing (logs what each piece of
+## playing a hand costs, and memory), shop, drag (a shop card dragged over its drop zone),
+## end (a run given up), lost (beaten by the Patron), won, gallery1–gallery4 (every Jester,
+## 40 to a page, at shop size), art1–art6 (the other painted cards; the cities on art5, court cards last), the tour (batch 12):
+## perform (a Scenario being performed, the crowd), encore, map, duo (a Lazzo tapped); and online, account, profile, leaderboards (these sign in to
+## the local API first). URL settings for tools/perf.mjs: quality, crt, fps, fx, swirl,
+## cardfx. Left out of the real "Web" export.
 
 
 func _ready() -> void:
@@ -31,6 +37,68 @@ static func _gallery(main: Control, page: int) -> void:
 		var k := i - first
 		v.position = Vector2(8 + (k % 10) * 63, 6 + (k / 10) * 88)
 		stage.add_child(v)
+
+
+## A page of the other painted cards (Tarocchi, Signs, Omens, Patrons, packs, Warrants, Favors,
+## decks, then the court cards), 40 to a page like the Jester gallery.
+static func _art(main: Control, page: int) -> void:
+	var cards := []
+	for kind in ["tarocchi", "sign", "omen", "patron", "pack", "warrant", "favor", "deck", "city"]:
+		for d in ContentDB.pool(kind):
+			cards.append([kind, d.id, null])
+	for s in 4:
+		for r in range(11, 14):
+			cards.append(["card", "", PlayingCard.make(-1, r, s)])
+	var sheet := ColorRect.new()
+	sheet.color = UiTheme.BG
+	sheet.set_anchors_preset(Control.PRESET_FULL_RECT)
+	main.add_child(sheet)
+	var stage := UiTheme.stage(sheet)
+	var first := (maxi(1, page) - 1) * 40
+	for i in range(first, mini(first + 40, cards.size())):
+		var v := CardView.new(Vector2(56, 78))
+		v.kind = cards[i][0]
+		v.def_id = cards[i][1]
+		if cards[i][2] != null:
+			v.card = cards[i][2]
+		var k := i - first
+		v.position = Vector2(8 + (k % 10) * 63, 6 + (k / 10) * 88)
+		stage.add_child(v)
+
+
+## A long session's worth of card faces (every Jester at shop size, then a deck at hand
+## size), shown a page at a time like the collection, for the card-art memory figures.
+static func _faces(main: Control) -> void:
+	var sheet := ColorRect.new()
+	sheet.color = UiTheme.BG
+	sheet.set_anchors_preset(Control.PRESET_FULL_RECT)
+	main.add_child(sheet)
+	var stage := UiTheme.stage(sheet)
+	var views := []
+	for d in ContentDB.pool("zanni"):
+		var v := CardView.new(Vector2(60, 84))
+		v.kind = "zanni"
+		v.def_id = d.id
+		views.append(v)
+	for s in 4:
+		for r in range(2, 15):
+			var v := CardView.new(Vector2(70, 98))
+			v.card = PlayingCard.make(-1, r, s)
+			views.append(v)
+	for i in views.size():
+		var v: CardView = views[i]
+		v.position = Vector2(8 + (i % 10) * 63, 6 + ((i / 10) % 4) * 88)
+		stage.add_child(v)
+		if i % 40 == 39 or i == views.size() - 1:
+			for f in 6:
+				await main.get_tree().process_frame
+			for old in views.slice(i - (i % 40), i + 1):
+				(old as Node).queue_free()
+	for f in 10:
+		await main.get_tree().process_frame
+	CardArt._trim()
+	await main.get_tree().process_frame
+	_memory_report()
 
 
 ## The six card backs side by side, each drawn while it's the chosen one.
@@ -79,12 +147,125 @@ static func report_performance(main: Control) -> void:
 			"process_ms": snappedf(Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0, 0.01),
 			"draw_calls": Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
 			"objects": Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME),
+			"texture_mb": snappedf(Performance.get_monitor(Performance.RENDER_TEXTURE_MEM_USED) / 1048576.0, 0.1),
+			"viewports": main.get_tree().root.find_children("*", "SubViewport", true, false).size(),
 		})))
+
+
+## Logs every frame over 40 ms to the page console with what happened in it: card faces
+## drawn, nodes made, and the engine's own frame time split. For tools/perf.mjs.
+static func watch_frames(main: Control) -> void:
+	if not OS.has_feature("web"):
+		return
+	var last := [Time.get_ticks_usec(), 0, 0]
+	main.get_tree().process_frame.connect(func() -> void:
+		var now := Time.get_ticks_usec()
+		var nodes := int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
+		var ms := (now - int(last[0])) / 1000.0
+		if ms > 40.0 and int(last[1]) > 0:
+			JavaScriptBridge.eval("console.log(%s)" % JSON.stringify("LONG FRAME %.0f ms: %d faces drawn, %+d nodes (now %d), process %.1f ms, viewports %d" % [
+				ms, CardArt.baked - int(last[2]), nodes - int(last[1]), nodes,
+				Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0,
+				main.get_tree().root.find_children("*", "SubViewport", true, false).size()]))
+		last[0] = now
+		last[1] = nodes
+		last[2] = CardArt.baked)
+
+
+## Logs where texture memory goes ("TIMING ..." lines): the font's glyph pages, the card
+## faces CardArt keeps, the backdrop.
+static func _memory_report() -> void:
+	var faces := 0
+	var face_bytes := 0
+	for v in CardArt.get_children():
+		if v is SubViewport:
+			faces += 1
+			face_bytes += (v as SubViewport).size.x * (v as SubViewport).size.y * 4
+	var font := UiTheme.font as FontFile
+	var sizes := 0
+	var pages := 0
+	var glyph_bytes := 0
+	for c in font.get_cache_count():
+		for s: Vector2i in font.get_size_cache_list(c):
+			sizes += 1
+			for t in font.get_texture_count(c, s):
+				var image := font.get_texture_image(c, s, t)
+				if image != null:
+					glyph_bytes += image.get_data_size()
+					pages += 1
+	JavaScriptBridge.eval("console.log(%s)" % JSON.stringify("TIMING textures %.1f MB in all; card faces %d = %.1f MB; font glyphs %d sizes, %d pages = %.1f MB" % [
+		Performance.get_monitor(Performance.RENDER_TEXTURE_MEM_USED) / 1048576.0, faces, face_bytes / 1048576.0, sizes, pages, glyph_bytes / 1048576.0]))
+
+
+## Times the pieces of playing a hand, each run 5 times, and logs them ("TIMING ...").
+static func _time_pieces(board: RunScreen) -> void:
+	var run := Game.run
+	var ids := board._selected_ids()
+	var pieces := {
+		"save the run (JSON + file)": func() -> void: Game._save_run(),
+		"run.to_dict + stringify": func() -> void: JSON.stringify(run.to_dict()),
+		"score preview": func() -> void: run.preview(ids),
+		"refresh the run screen": func() -> void: board.refresh(),
+		"build the hand": func() -> void: board._build_hand(),
+		"build the top row": func() -> void: board._build_top(),
+		"side panel": func() -> void: board._update_side(),
+		"score a copy (Scorer)": func() -> void:
+			var copy := RunState.from_dict(run.to_dict())
+			copy.apply({"a": "play", "cards": ids}),
+	}
+	for name in pieces:
+		var start := Time.get_ticks_usec()
+		for i in 5:
+			pieces[name].call()
+		var ms := (Time.get_ticks_usec() - start) / 5000.0
+		JavaScriptBridge.eval("console.log(%s)" % JSON.stringify("TIMING %s: %.2f ms" % [name, ms]))
+	# A late run: a full tour logs about 300 actions.
+	var entry: Dictionary = run.action_log[run.action_log.size() - 1]
+	while run.action_log.size() < 300:
+		run.action_log.append(entry.duplicate(true))
+	var t0 := Time.get_ticks_usec()
+	for i in 5:
+		Game._save_run()
+	JavaScriptBridge.eval("console.log(%s)" % JSON.stringify("TIMING save with 300 logged actions: %.2f ms" % ((Time.get_ticks_usec() - t0) / 5000.0)))
+	t0 = Time.get_ticks_usec()
+	for i in 5:
+		run.preview(ids)
+	JavaScriptBridge.eval("console.log(%s)" % JSON.stringify("TIMING preview with 300 logged actions: %.2f ms" % ((Time.get_ticks_usec() - t0) / 5000.0)))
+
+
+## A setting from the page URL (?quality=0&crt=1&fps=30), for tools/perf.mjs; -1 if absent.
+static func _url_setting(name: String) -> int:
+	if not OS.has_feature("web"):
+		return -1
+	return int(JavaScriptBridge.eval("Number(new URLSearchParams(location.search).get('%s') ?? -1)" % name, true))
 
 
 static func open(main: Control, screen: String) -> void:
 	report_performance(main)
+	watch_frames(main)
 	seed(7)
+	if _url_setting("quality") >= 0:
+		Settings.quality = _url_setting("quality")
+	if _url_setting("crt") >= 0:
+		Settings.crt = _url_setting("crt")
+	if _url_setting("fps") >= 0:
+		Settings.fps = _url_setting("fps")
+	Feel.apply_settings()
+	# Experiments for tools/perf.mjs: fx=0 drops floating numbers and particles, swirl=0 stops
+	# redrawing the backdrop, cardfx=0 stops the cards' pointer tilt.
+	if _url_setting("fx") == 0:
+		Feel.effects = null
+	if _url_setting("swirl") == 0:
+		Feel._backdrop_view.render_target_update_mode = SubViewport.UPDATE_DISABLED
+		Feel.set_process(false)
+	if _url_setting("cardfx") == 0:
+		var timer := Timer.new()
+		timer.wait_time = 0.1
+		timer.autostart = true
+		main.add_child(timer)
+		timer.timeout.connect(func() -> void:
+			for node in main.find_children("*", "CardView", true, false):
+				node.set_process(false))
 	Settings.seen_help = screen != "help"
 	Settings.tutorial_step = 0 if screen.begins_with("coach") else -1
 	if screen == "menu":
@@ -95,6 +276,27 @@ static func open(main: Control, screen: String) -> void:
 	if screen == "backs":
 		_backs(main)
 		return
+	if screen == "faces":
+		_faces(main)
+		return
+	if screen == "collection":
+		for d in ContentDB.pool("zanni").slice(0, 40):
+			Game.profile.discovered[d.id] = true
+		UiTheme.show_sheet(CollectionSheet.new())
+		return
+	if screen == "lazzi":
+		UiTheme.show_sheet(CollectionSheet.new("lazzo"))
+		return
+	if screen == "tour":
+		var help := HowToPlay.new()
+		help.page = 1
+		UiTheme.show_sheet(help)
+		return
+	if screen == "seed":
+		UiTheme.show_sheet(SeedSheet.new(func(_s: String) -> void: pass, "Bergamo deck, Stake 1"))
+		return
+	if screen == "contrast":
+		Settings.high_contrast = true
 	if screen == "conflict":
 		var cloud := {"version": 4, "device": "Android", "updated_at": Time.get_unix_time_from_system() - 3 * 3600,
 			"data": {"profile": {"total_wins": 3, "runs_lost": 9, "discovered": range(40)}, "run": {"town": 5}}}
@@ -113,6 +315,9 @@ static func open(main: Control, screen: String) -> void:
 	if screen.begins_with("gallery"):
 		_gallery(main, int(screen.substr(7)))
 		return
+	if screen.begins_with("art"):
+		_art(main, int(screen.substr(3)))
+		return
 	Game.new_run("d_bergamo", 1)
 	var run := Game.run
 	var n := 100
@@ -122,12 +327,32 @@ static func open(main: Control, screen: String) -> void:
 	for id in ["t_matto", "s_aries"]:
 		run.consumables.append(ItemCard.make(id, n))
 		n += 1
+	if screen == "duo":
+		var duo := ItemCard.make("lz_vecchi", 10)
+		duo.parts.assign([ItemCard.make("z_pantalone", 5), ItemCard.make("z_dottore", 4)])
+		run.zanni[3] = duo
 	main._show_run()
 	var board: RunScreen = main.screens.get_child(main.screens.get_child_count() - 1)
 	if screen in ["help", "choose", "coach"]:
 		return
-	Game.act({"a": "select_show"})
+	if screen == "map":
+		run.show_index = Shows.PATRON
+		run.phase = RunState.Phase.SHOP
+		run.shop = ShopState.new()
+		Game.act({"a": "leave_shop"})
+		Game.changed.emit()
+		return
+	Game.act({"a": "select_show", "perform": screen == "perform"})
 	match screen:
+		"encore":
+			run.show_target = 1.0
+			Game.act({"a": "play", "cards": [run.hand[0].id, run.hand[1].id]})
+			Game.changed.emit()
+			return
+		"duo":
+			board.selection = {"zone": "zanni", "index": 3}
+			board.refresh()
+			return
 		"tip":
 			board.selection = {"zone": "zanni", "index": 1}
 			board.refresh()
@@ -145,9 +370,31 @@ static func open(main: Control, screen: String) -> void:
 			Game.give_up()
 			board.refresh()
 			return
+		"lost":
+			run.show_index = Shows.PATRON
+			run.show_score = 1840.0
+			run.phase = RunState.Phase.LOST
+			Game.finish_run()
+			board.refresh()
+			return
+		"notallowed":
+			run.show_counters["patron"] = "pt_ciambellano"
+		"drag":
+			run.show_target = 1.0
+			Game.act({"a": "play", "cards": [run.hand[0].id]})
+			Game.act({"a": "bow"})
+			Game.act({"a": "cash_out"})
+			Game.changed.emit()
+			await main.get_tree().process_frame
+			var offer: Control = board.middle.get_children().filter(func(c: Node) -> bool: return c is CardView)[0]
+			offer.global_position = board.top_row.get_global_rect().get_center() - offer.size / 2.0
+			offer.z_index = 2
+			board._show_hint("top", "Drop to buy for 6", true, offer)
+			return
 		"shop", "won":
 			run.show_target = 1.0
 			Game.act({"a": "play", "cards": [run.hand[0].id]})
+			Game.act({"a": "bow"})
 			Game.act({"a": "cash_out"})
 			run.ducats = 40
 			if screen == "won":
@@ -158,6 +405,14 @@ static func open(main: Control, screen: String) -> void:
 			return
 	board.selected_hand.assign([run.hand[0].id, run.hand[1].id, run.hand[2].id])
 	board.refresh()
+	if screen == "timing":
+		await main.get_tree().create_timer(2.0).timeout
+		_memory_report()
+		_time_pieces(board)
+		return
 	if screen == "scoring":
-		await main.get_tree().create_timer(1.0).timeout
+		# Long enough for Feel.prepare_audio() to finish, as it would on the menu.
+		await main.get_tree().create_timer(3.0).timeout
+		if OS.has_feature("web"):
+			JavaScriptBridge.eval("window.foolsScoring = performance.now()")
 		board._on_play()

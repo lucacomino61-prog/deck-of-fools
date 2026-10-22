@@ -38,6 +38,14 @@ window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 window/handheld/orientation=4
 
+[importer_defaults]
+
+texture={
+"compress/lossy_quality": 0.8,
+"compress/mode": 1,
+"mipmaps/generate": true
+}
+
 [internationalization]
 
 locale/translations=PackedStringArray("res://i18n/cards.en.translation")
@@ -48,4 +56,4 @@ environment/defaults/default_clear_color=Color(0.105882, 0.0627451, 0.14902, 1)
 
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
-textures/canvas_textures/default_texture_filter=0
+textures/canvas_textures/default_texture_filter=1

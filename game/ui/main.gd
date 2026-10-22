@@ -34,6 +34,7 @@ func _ready() -> void:
 	Feel.effects = fx_root
 	Feel.crt_rect = crt
 	Feel.apply_settings()
+	Feel.prepare_audio()
 	UiTheme.sheet_host = self
 	Online.conflict.connect(func(cloud: Dictionary) -> void: UiTheme.show_sheet(ConflictSheet.new(cloud)))
 	_show_menu()

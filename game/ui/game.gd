@@ -45,12 +45,13 @@ func peek_saved_run() -> RunState:
 	return RunState.from_dict(data) if data is Dictionary else null
 
 
-## A new run; the daily run passes its seed and {daily_date, practice}.
+## A new run; the daily run passes its seed and {daily_date, practice}, a seeded run its
+## seed and {seeded}.
 func new_run(deck_id: String, stake: int, challenge_id := "", seed := "", meta := {}) -> void:
 	var deck := deck_id
 	if challenge_id != "":
 		deck = str(ContentDB.get_def(challenge_id).data["deck"])
-	run = RunState.create(seed if seed != "" else _random_seed(), deck, stake, challenge_id, profile.locked_cards())
+	run = RunState.create(seed if seed != "" else random_seed(), deck, stake, challenge_id, profile.locked_cards())
 	run_meta = meta.duplicate()
 	recorded = false
 	win_seen = false
@@ -110,7 +111,8 @@ func act(action: Dictionary, quiet := false) -> Dictionary:
 func finish_run() -> void:
 	if run == null or recorded:
 		return
-	profile.record_run(run)
+	# A seeded run's cards were known in advance, so only its discoveries count.
+	profile.record_run(run, not run_meta.get("seeded", false))
 	recorded = true
 	_save_json(PROFILE_PATH, profile.to_dict())
 	if FileAccess.file_exists(RUN_PATH):
@@ -123,12 +125,14 @@ func give_up() -> void:
 	if run == null or recorded:
 		return
 	run.phase = RunState.Phase.LOST
+	run_meta["gave_up"] = true
+	_save_json(RUN_META_PATH, run_meta)
 	_save_run()
 	finish_run()
 
 
-## Gives up and starts the same kind of run again: a new seed, or for a daily run the
-## day's seed again as practice (the ranked try is used up).
+## Gives up and starts the same kind of run again: a new seed; for a daily run the day's
+## seed again as practice (the ranked try is used up); for a seeded run its seed again.
 func restart() -> void:
 	if run == null:
 		return
@@ -136,9 +140,12 @@ func restart() -> void:
 	var stake := run.stake
 	var challenge := run.challenge
 	var meta := run_meta.duplicate()
+	meta.erase("gave_up")
 	var seed := ""
 	if meta.has("daily_date"):
 		meta["practice"] = true
+		seed = run.seed_text
+	if meta.get("seeded", false):
 		seed = run.seed_text
 	give_up()
 	new_run(deck, stake, challenge, seed, meta)
@@ -175,7 +182,7 @@ func _save_json(path: String, data: Dictionary, changed_here := true) -> void:
 		Online.mark_dirty()
 
 
-func _random_seed() -> String:
+func random_seed() -> String:
 	var out := ""
 	for i in 8:
 		out += SEED_LETTERS[randi() % SEED_LETTERS.length()]

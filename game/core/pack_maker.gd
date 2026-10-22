@@ -23,8 +23,12 @@ static func roll_shop_packs(run: RunState) -> Array[Dictionary]:
 	if defs.is_empty():
 		return out
 	var banned := {"zanni": run.stat("jesters_banned") > 0, "sign": run.stat("signs_banned") > 0}
+	var lean := {}
+	for contents in ["tarocchi", "sign", "card", "zanni", "omen"]:
+		lean[contents] = run.stat("pack_%s_pct" % contents) / 100.0
 	var weights := defs.map(func(d: ContentDef) -> float:
-		return 0.0 if banned.get(d.data["contents"], false) else float(d.data.get("weight", 0.0)))
+		var contents := str(d.data["contents"])
+		return 0.0 if banned.get(contents, false) else float(d.data.get("weight", 0.0)) * float(lean.get(contents, 1.0)))
 	for i in run.stat("pack_slots"):
 		var k := run.rng("packs").pick_weighted(weights)
 		if k >= 0:
@@ -91,6 +95,8 @@ static func _one(run: RunState, contents: String, r: ZRng, taken: Dictionary, in
 ## of the three extras.
 static func random_card(run: RunState, r: ZRng, upgraded: bool) -> Dictionary:
 	var card := {"rank": 2 + r.below(13), "suit": r.below(4), "enh": "", "ed": "", "seal": ""}
+	if run.stat("pack_hearts") > 0 and r.chance(0.5):
+		card["suit"] = PlayingCard.Suit.HEARTS
 	var enhancements := ContentDB.pool("enhancement")
 	var seals := ContentDB.pool("seal")
 	if not enhancements.is_empty() and r.chance(CARD_ENHANCE_CHANCE):

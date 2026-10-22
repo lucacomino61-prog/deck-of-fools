@@ -145,6 +145,7 @@ func test_tipografo_copies_a_card() -> void:
 	var copy := run.full_deck[52]
 	ok(run.full_deck.slice(0, 52).any(func(c: PlayingCard) -> bool: return c.rank == copy.rank and c.suit == copy.suit),
 		"it matches a card already in the deck")
+	ok(run.draw_pile.has(copy) or run.hand.has(copy), "it can be drawn in this show")
 
 
 # --- Signs and Tarocchi ---

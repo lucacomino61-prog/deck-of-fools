@@ -68,6 +68,48 @@ func test_score_preview() -> void:
 	eq(float(run.apply({"a": "play", "cards": picked})["total"]), guess, "the play scores what the preview said")
 
 
+## A Jester's value right now (from what it has grown or from the run) and its share of
+## a previewed hand, as scoring events labelled with its place in the row.
+func test_jester_values() -> void:
+	ContentPacks.register_all()
+	TestContent.add_test_defs()
+	var run := RunState.create("NOW")
+	var pantalone := ItemCard.make("z_pantalone", 5)
+	pantalone.state["mult"] = 4
+	run.zanni.append(ItemCard.make("z_claque", 6))
+	run.zanni.append(pantalone)
+	run.ducats = 9
+	var claque_now := run.jester_now(0)
+	eq(claque_now.size(), 1, "Claque adds one thing")
+	if claque_now.size() == 1:
+		eq(str(claque_now[0]["t"]), "mult", "Claque adds Mult")
+		eq(float(claque_now[0]["v"]), 3.0, "9 ducats make +3 Mult")
+	var pantalone_now := run.jester_now(1)
+	eq(float(pantalone_now[0]["v"]) if not pantalone_now.is_empty() else 0.0, 4.0, "Pantalone has grown +4 Mult")
+	eq(run.jester_now(5), [], "no Jester there")
+	run.apply({"a": "select_show"})
+	var detail := run.preview_detail(_hand_ids(run, 2))
+	ok(detail.get("events", []).any(func(e: Dictionary) -> bool: return str(e["src"]) == "zanni:z_pantalone#1"), "the preview says which Jester added what")
+	eq(run.preview_detail([99999]), {}, "nothing to preview for a card not in hand")
+
+
+## A seeded run: the same seed deals the same run; it counts only for discoveries.
+func test_seeded_runs() -> void:
+	var a := RunState.create("SK67HXC2")
+	var b := RunState.create("SK67HXC2")
+	a.apply({"a": "select_show"})
+	b.apply({"a": "select_show"})
+	eq(ids(a.hand), ids(b.hand), "the same seed deals the same hand")
+	var p := Profile.new()
+	a.seen["z_zanni"] = true
+	a.feats["won_run"] = true
+	a.won = true
+	p.record_run(a, false)
+	ok(p.discovered.has("z_zanni"), "its discoveries count")
+	eq(p.total_wins, 0, "its win doesn't")
+	ok(not p.feats.has("won_run"), "nor its feats")
+
+
 func test_losing_when_out_of_hands() -> void:
 	var run := RunState.create("LOSE")
 	run.apply({"a": "select_show"})

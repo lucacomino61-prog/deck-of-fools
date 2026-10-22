@@ -9,3 +9,7 @@ build/
 # Dependencies and logs
 node_modules/
 *.log
+
+# Local tool state (Higgsfield result URLs name the account; this repository is public)
+tools/art/state.json
+.wrangler/

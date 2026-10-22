@@ -3,7 +3,8 @@ extends Control
 ## The title menu, laid out to explain itself. The left panel sets up a new run: a deck, then
 ## a stake, each with what it does, and how a locked one unlocks; or a challenge. The right
 ## column shows the tour in progress with Continue (or how a run works), the daily run, and
-## Profile, Leaderboards, How to play and Settings. The player's name sits in the corner.
+## Collection, Profile, Leaderboards, How to play, Seeded run and Settings. The player's
+## name sits in the corner.
 
 signal start
 
@@ -60,15 +61,16 @@ func _build() -> void:
 	Feel.mood("menu")
 	var stage := UiTheme.stage(self)
 
-	var title := UiTheme.title("DECK OF FOOLS", 30, UiTheme.GOLD)
+	# Centred over the left of the screen, clear of the account chip in the top right.
+	var title := UiTheme.title("DECK OF FOOLS", 27, UiTheme.GOLD)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.position = Vector2(0, 4)
-	title.size = Vector2(640, 38)
+	title.position = Vector2(0, 5)
+	title.size = Vector2(560, 36)
 	stage.add_child(title)
 	var sub := UiTheme.title("A troupe of Jesters against the house", 10, UiTheme.TEXT)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.position = Vector2(0, 38)
-	sub.size = Vector2(640, 14)
+	sub.size = Vector2(560, 14)
 	stage.add_child(sub)
 
 	_build_setup(stage)
@@ -214,8 +216,9 @@ func _build_side(stage: Control) -> void:
 	more.columns = 2
 	more.add_theme_constant_override("h_separation", 4)
 	more.add_theme_constant_override("v_separation", 4)
-	for entry in [["Profile", func() -> void: _open(ProfileSheet.new())], ["Leaderboards", func() -> void: _open(LeaderboardSheet.new())],
-			["How to play", func() -> void: _open(HowToPlay.new())], ["Settings", func() -> void: _open(SettingsSheet.new())]]:
+	for entry in [["Collection", func() -> void: _open(CollectionSheet.new())], ["Profile", func() -> void: _open(ProfileSheet.new())],
+			["Leaderboards", func() -> void: _open(LeaderboardSheet.new())], ["How to play", func() -> void: _open(HowToPlay.new())],
+			["Seeded run", func() -> void: _open(SeedSheet.new(_start_seeded, _setup_text()))], ["Settings", func() -> void: _open(SettingsSheet.new())]]:
 		var b := UiTheme.button(entry[0], entry[1], 11, UiTheme.POINTS.darkened(0.15) if entry[0] != "Settings" else UiTheme.PANEL_LIGHT)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.custom_minimum_size = Vector2(0, 24)
@@ -322,6 +325,28 @@ func _on_start() -> void:
 		Game.new_run(deck_ids[deck_index], stake)
 	else:
 		Game.new_run("", 1, challenge_ids[challenge_index])
+	start.emit()
+
+
+## What the left panel has picked, for the Seeded run sheet ("" when the deck is locked).
+func _setup_text() -> String:
+	if mode != "deck":
+		var challenge: String = challenge_ids[challenge_index]
+		return "Challenge: " + UiTheme.name_of(challenge) if Game.profile.challenge_unlocked(challenge) else ""
+	var deck: String = deck_ids[deck_index]
+	if not Game.profile.deck_unlocked(deck):
+		return ""
+	return "%s deck, Stake %d" % [UiTheme.name_of(deck), stake]
+
+
+## A run from a typed seed, with the deck and stake (or the challenge) picked on the left.
+## It doesn't count for leaderboards or unlocks.
+func _start_seeded(seed_text: String) -> void:
+	Feel.play("play")
+	if mode == "deck":
+		Game.new_run(deck_ids[deck_index], stake, "", seed_text, {"seeded": true})
+	else:
+		Game.new_run("", 1, challenge_ids[challenge_index], seed_text, {"seeded": true})
 	start.emit()
 
 

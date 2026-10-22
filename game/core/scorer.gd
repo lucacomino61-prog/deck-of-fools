@@ -6,7 +6,7 @@ extends RefCounted
 ##   3. each scoring card, left to right (plus retriggers): its points, its enhancement /
 ##      edition / seal, then every zanni's card_scored
 ##   4. each card held in hand (plus retriggers): card mods and zanni card_held
-##   5. each zanni, left to right: edition before, its own effect, edition after;
+##   5. each zanni, left to right (right to left in Palermo): edition before, its own effect, edition after;
 ##      then "scored" hooks on everything else (e.g. a Warrant's ×Mult)
 ##   6. total = floor(points × mult); after_scored on each scoring card's mods (e.g. a
 ##      Mirror card shattering); after_score hooks
@@ -33,22 +33,23 @@ static func score(run: RunState, played: Array[PlayingCard], held: Array[Playing
 	ctx.note("base", result.type)
 	run.fire_all("after_base", ctx)
 
+	var order := run.firing_order()
 	for card in ctx.scoring:
 		if card.debuffed:
 			ctx.note("debuffed", "card", card.id)
 			continue
 		var times := 1 + run.count_retriggers(ctx, card, "retrigger_scored")
 		for i in times:
-			_score_card(run, ctx, card)
+			_score_card(run, ctx, card, order)
 
 	for card in held:
 		if card.debuffed:
 			continue
 		var times := 1 + run.count_retriggers(ctx, card, "retrigger_held")
 		for i in times:
-			_hold_card(run, ctx, card)
+			_hold_card(run, ctx, card, order)
 
-	for item in run.zanni:
+	for item in order:
 		if item.debuffed:
 			continue
 		var edition := ContentDB.get_def(item.edition)
@@ -68,16 +69,16 @@ static func score(run: RunState, played: Array[PlayingCard], held: Array[Playing
 	return ctx
 
 
-static func _score_card(run: RunState, ctx: ScoreContext, card: PlayingCard) -> void:
+static func _score_card(run: RunState, ctx: ScoreContext, card: PlayingCard, order: Array[ItemCard]) -> void:
 	ctx.add_points(card.base_points() + card.bonus_points, "card", card.id)
 	run.fire_card_mods("card_scored", ctx, card)
-	for item in run.zanni:
+	for item in order:
 		if not item.debuffed:
 			run.fire_item(item, "card_scored", ctx, [card])
 
 
-static func _hold_card(run: RunState, ctx: ScoreContext, card: PlayingCard) -> void:
+static func _hold_card(run: RunState, ctx: ScoreContext, card: PlayingCard, order: Array[ItemCard]) -> void:
 	run.fire_card_mods("card_held", ctx, card)
-	for item in run.zanni:
+	for item in order:
 		if not item.debuffed:
 			run.fire_item(item, "card_held", ctx, [card])

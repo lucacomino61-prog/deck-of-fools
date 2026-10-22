@@ -16,28 +16,38 @@ var total := 0.0
 var events: Array[Dictionary] = []
 ## Cards an effect destroyed (e.g. a shattering enhancement); removed from the deck after scoring.
 var destroyed: Array[PlayingCard] = []
+## Notes rules leave for after scoring, e.g. "beat": whether the Scenario's beat was hit.
+var flags: Dictionary = {}
 
 
 func has(hand: String) -> bool:
 	return bool(contains.get(hand, false))
 
 
+## While a duo (Lazzo) fires its two Jesters, every amount below grows by run.duo_scale.
 func add_points(amount: float, source: String, card_id := -1) -> void:
+	if run != null:
+		amount = run.duo_amount(amount, 5.0)
 	points += amount
 	_log("points", amount, source, card_id)
 
 
 func add_mult(amount: float, source: String, card_id := -1) -> void:
+	if run != null:
+		amount = run.duo_amount(amount, 1.0)
 	mult += amount
 	_log("mult", amount, source, card_id)
 
 
 func x_mult(factor: float, source: String, card_id := -1) -> void:
+	if run != null:
+		factor = run.duo_factor(factor)
 	mult *= factor
 	_log("xmult", factor, source, card_id)
 
 
 func add_ducats(amount: int, source: String, card_id := -1) -> void:
+	amount = roundi(run.duo_amount(amount, 1.0))
 	run.ducats += amount
 	_log("ducats", amount, source, card_id)
 

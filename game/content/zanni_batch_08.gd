@@ -73,12 +73,11 @@ static func _uncommons() -> void:
 	var tipografo := func(run: RunState, _item: ItemCard) -> void:
 		if run.full_deck.is_empty():
 			return
-		var original: PlayingCard = run.full_deck[run.rng("tipografo").below(run.full_deck.size())]
-		var copy := run.add_card(original.rank, original.suit)
-		copy.enhancement = original.enhancement
-		copy.edition = original.edition
-		copy.seal = original.seal
-		copy.bonus_points = original.bonus_points
+		var r := run.rng("tipografo")
+		var original: PlayingCard = run.full_deck[r.below(run.full_deck.size())]
+		var copy := run.copy_card(original)
+		# Shuffled into the draw pile, so the copy can turn up in this very show.
+		run.draw_pile.insert(r.below(run.draw_pile.size() + 1), copy)
 	_add("z_tipografo", 6, {"show_start": tipografo}, UNCOMMON)
 
 	# Signs and Tarocchi

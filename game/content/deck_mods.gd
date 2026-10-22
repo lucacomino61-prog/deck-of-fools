@@ -38,8 +38,8 @@ static func _enhancements() -> void:
 	_add("enh_marble", "enhancement", {},
 		{"no_rank": true, "no_suit": true, "always_scores": true, "points_override": 50})
 
-	var gilt := func(_run: RunState, _item: ItemCard, _card: PlayingCard) -> int:
-		return 3
+	var gilt := func(run: RunState, _item: ItemCard, _card: PlayingCard) -> int:
+		return 3 * run.stat("gilt_mult")
 	_add("enh_gilt", "enhancement", {"payout_held": gilt})
 
 	var charmed := func(ctx: ScoreContext, _item: ItemCard, card: PlayingCard) -> void:

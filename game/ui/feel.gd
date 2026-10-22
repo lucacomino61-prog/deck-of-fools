@@ -262,8 +262,10 @@ func _set_colours(colours: Array) -> void:
 		_backdrop.set_shader_parameter("c%d" % i, colours[i])
 
 
-func shake(strength: float) -> void:
-	if Settings.reduce_motion or shake_target == null:
+## Shakes the screens, scaled by the Screen shake setting (none with Reduce motion).
+func shake(amount: float) -> void:
+	var strength: float = amount * Settings.SHAKE_SCALE[Settings.shake]
+	if Settings.reduce_motion or shake_target == null or strength <= 0.0:
 		return
 	var t := shake_target.create_tween()
 	for i in 5:
@@ -334,6 +336,28 @@ func play(cue: String, pitch := 1.0) -> void:
 	p.volume_db = CUES[cue][1] + linear_to_db(maxf(Settings.sfx_volume, 0.001))
 	p.pitch_scale = pitch * (randf_range(0.96, 1.04) if cue in WOBBLE else 1.0)
 	p.play()
+
+
+## On the web, Godot turns a sound into a WebAudio buffer the first time it plays, decoding
+## all of it at once: the 48-second show music froze the first show for half a second on a
+## slow phone. This does it ahead, one sound every other frame, while the menu is up (the
+## main scene starts it). Native builds stream audio and don't need it.
+func prepare_audio() -> void:
+	if not OS.has_feature("web") or _players.is_empty():
+		return
+	var streams: Array[AudioStream] = []
+	for cue in CUES:
+		for take in CUES[cue][0]:
+			if not _sounds.has(take):
+				_sounds[take] = load("res://audio/sfx/%s.wav" % take)
+			streams.append(_sounds[take])
+	for track in TRACKS.values() + DRIVES.values().map(func(d: Array) -> String: return d[0]):
+		streams.append(_load_track(track))
+	for stream in streams:
+		await get_tree().process_frame
+		await get_tree().process_frame
+		if not AudioServer.is_stream_registered_as_sample(stream):
+			AudioServer.register_stream_as_sample(stream)
 
 
 ## Fades the music over to `track` (or out, with Music off or at zero), looping it

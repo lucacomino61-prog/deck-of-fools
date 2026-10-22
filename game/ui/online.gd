@@ -287,9 +287,10 @@ func _adopt(cloud: Dictionary) -> void:
 
 # --- runs, the daily run and leaderboards ---
 
-## Hands in a finished run (queued while offline). Practice runs of the daily aren't ranked.
+## Hands in a finished run (queued while offline). Practice runs of the daily and seeded
+## runs aren't ranked.
 func submit_run(run: RunState, meta: Dictionary) -> void:
-	if inert or bool(meta.get("practice", false)):
+	if inert or bool(meta.get("practice", false)) or bool(meta.get("seeded", false)):
 		return
 	var entry := {
 		"seed": run.seed_text, "deck": run.deck_id, "stake": run.stake, "challenge": run.challenge,

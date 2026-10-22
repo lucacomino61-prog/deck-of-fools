@@ -12,6 +12,8 @@ const RANKS := {11: "J", 12: "Q", 13: "K", 14: "A"}
 const KIND_COLOURS := {
 	"tarocchi": Color("6a3d9a"), "sign": Color("23407a"), "omen": Color("1f6e6a"),
 	"pack": Color("7a4a25"), "warrant": Color("8a6a1a"), "show": Color("3d2756"),
+	"favor": Color("2f7a4a"), "patron": Color("8a2030"), "deck": Color("2a4a8a"),
+	"lazzo": Color("c8962a"), "city": Color("8a5a2a"),
 }
 ## Frames by rarity: blue, green, red, gold.
 const RARITY_COLOURS := [Color("3f74c4"), Color("2f9a5a"), Color("c43a4a"), Color("c8962a")]
@@ -50,12 +52,15 @@ const RARITY_NAMES := ["Common", "Uncommon", "Rare", "Legendary"]
 
 ## Held without moving: show the card big with its full text (also right-click).
 signal long_pressed(view: CardView)
-## Dragged sideways (when draggable): the screen moves it and reorders on release.
+## Dragged sideways (when draggable), or any way (free_drag): the screen moves it, and
+## reorders or acts on release.
 signal drag_moved(view: CardView, at: Vector2)
 signal drag_ended(view: CardView, at: Vector2)
 ## Flicked up (+1) or down (-1) (when swipeable): play or discard the selected cards.
 signal swiped(view: CardView, direction: int)
 
+## Suits as the court-card paintings name them (res://art/face/<suit>_<j|q|k>.webp).
+const SUIT_KEYS := ["spades", "hearts", "clubs", "diamonds"]
 const HOLD_SECONDS := 0.42
 const FOILS := {"ed_silvered": 1, "ed_opaline": 2, "ed_prismatic": 3, "ed_shadow": 4}
 
@@ -74,6 +79,9 @@ var tag: Dictionary = {}
 var sway := -1
 var draggable := false
 var swipeable := false
+## Dragged in any direction (the screen moves it and acts on where it's dropped: buy, sell,
+## use, pick), as Balatro does on phones.
+var free_drag := false
 ## True for the copy CardArt draws into a texture: it draws the face itself, nothing else.
 var baking := false
 
@@ -85,6 +93,9 @@ var _hovered := false
 var _gesture := ""
 var _press_at := Vector2.ZERO
 var _hold_id := 0
+## The paintings this face drew. A draw command keeps only the texture's id, so without this
+## the textures are freed before the viewport renders and the card comes out blank.
+var _paintings: Array[Texture2D] = []
 
 
 func _init(view_size := Vector2(52, 72)) -> void:
@@ -99,6 +110,7 @@ func _init(view_size := Vector2(52, 72)) -> void:
 func _ready() -> void:
 	if baking:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		set_process(false)
 		return
 	_face = TextureRect.new()
 	_face.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -113,13 +125,17 @@ func _ready() -> void:
 	_overlay.draw.connect(_draw_overlay)
 	add_child(_overlay)
 	if Settings.quality > 0:
+		# Set once: the idle sway and wobble then run in the shader. Only the tilt toward the
+		# pointer changes, and only while the pointer is on this card (a material changed every
+		# frame re-uploads its uniforms, which costs a lot on phones).
 		_material = ShaderMaterial.new()
 		_material.shader = preload("res://shaders/card.gdshader")
 		_material.set_shader_parameter("card_size", size)
 		_material.set_shader_parameter("foil", 0 if face_down else FOILS.get(edition, 0))
+		_material.set_shader_parameter("sway", -1.0 if sway < 0 or Settings.reduce_motion else float(sway))
 		_face.material = _material
 	set_art(CardArt.request(self))
-	set_process(_material != null or sway >= 0)
+	set_process(false)
 
 
 ## The texture CardArt drew for this face.
@@ -130,14 +146,24 @@ func set_art(texture: Texture2D) -> void:
 
 ## Everything that changes how the face looks; equal keys share one texture.
 func art_key() -> String:
-	var face := ""
-	if face_down:
-		face = "back%d" % Settings.card_back
-	elif kind == "card":
-		face = "card %d %d %s %s %s" % [card.rank, card.suit, card.enhancement, edition, card.seal]
-	else:
-		face = "%s %s %s %s" % [kind, def_id, edition, sticker]
+	if not face_down and kind == "card":
+		return playing_key(card, edition, size)
+	var face := "back%d" % Settings.card_back if face_down else "%s %s %s %s" % [kind, def_id, edition, sticker]
 	return "%s @%dx%d q%d" % [face, size.x, size.y, Settings.quality]
+
+
+## A face-up playing card's art key, without a view (CardArt draws faces ahead with it).
+static func playing_key(c: PlayingCard, card_edition: String, view_size: Vector2) -> String:
+	return "card %d %d %s %s %s%s @%dx%d q%d" % [c.rank, c.suit, c.enhancement, card_edition, c.seal,
+		" hc" if Settings.high_contrast else "", view_size.x, view_size.y, Settings.quality]
+
+
+## A suit's ink: red and black, or with high-contrast suits on, black Spades, red Hearts,
+## blue Clubs and orange Diamonds (as Balatro's high-contrast cards), so no two look alike.
+static func suit_colour(suit: int) -> Color:
+	if Settings.high_contrast:
+		return [UiTheme.BLACK_SUIT, UiTheme.RED_SUIT, Color("2465c0"), Color("e0731c")][suit]
+	return UiTheme.RED_SUIT if suit == PlayingCard.Suit.HEARTS or suit == PlayingCard.Suit.DIAMONDS else UiTheme.BLACK_SUIT
 
 
 func baked_copy() -> CardView:
@@ -149,25 +175,31 @@ func baked_copy() -> CardView:
 	copy.sticker = sticker
 	copy.face_down = face_down
 	copy.baking = true
+	# Paintings are shrunk a lot onto small cards: smooth, with mipmaps.
+	copy.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	return copy
 
 
+## Runs only while the pointer is on the card or a finger holds it: the card tilts toward
+## it, then settles and stops. A resting card's sway and wobble happen in the shader (from
+## TIME and its sway index), so resting cards cost nothing here.
 func _process(delta: float) -> void:
-	var t := Time.get_ticks_msec() / 1000.0
-	if Settings.reduce_motion:
-		rotation = 0.0
+	if _material == null:
+		set_process(false)
+		return
+	var target := Vector2.ZERO
+	if not Settings.reduce_motion and (_hovered or _gesture != ""):
+		target = (((get_local_mouse_position() / size) - Vector2(0.5, 0.5)) * 2.0).clamp(Vector2(-1, -1), Vector2(1, 1))
+	_tilt = _tilt.lerp(target, clampf(delta * 10.0, 0.0, 1.0))
+	if target == Vector2.ZERO and _tilt.length() < 0.01:
 		_tilt = Vector2.ZERO
-	else:
-		if sway >= 0 and _gesture != "drag":
-			rotation = sin(t * 1.6 + sway * 0.9) * 0.025
-		var target := Vector2.ZERO
-		if _hovered or _gesture != "":
-			target = ((get_local_mouse_position() / size) - Vector2(0.5, 0.5)) * 2.0
-		elif sway >= 0:
-			target = Vector2(sin(t * 1.1 + sway), cos(t * 0.8 + sway * 1.3)) * 0.18
-		_tilt = _tilt.lerp(target.clamp(Vector2(-1, -1), Vector2(1, 1)), clampf(delta * 10.0, 0.0, 1.0))
+		set_process(false)
+	_material.set_shader_parameter("tilt", _tilt)
+
+
+func _wake() -> void:
 	if _material != null:
-		_material.set_shader_parameter("tilt", _tilt)
+		set_process(true)
 
 
 ## Tap, hold, drag sideways, or flick up/down. A tap happens on release, so the other
@@ -179,6 +211,7 @@ func _gui_input(event: InputEvent) -> void:
 			accept_event()
 		elif event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 			_gesture = "press"
+			_wake()
 			_press_at = event.global_position
 			_hold_id += 1
 			var id := _hold_id
@@ -202,7 +235,10 @@ func _gui_input(event: InputEvent) -> void:
 	elif event is InputEventMouseMotion and _gesture != "":
 		var moved: Vector2 = event.global_position - _press_at
 		if _gesture == "press" and moved.length() > 9.0:
-			if swipeable and absf(moved.y) > absf(moved.x) * 1.2:
+			if free_drag:
+				_gesture = "drag"
+				z_index = 2
+			elif swipeable and absf(moved.y) > absf(moved.x) * 1.2:
 				_gesture = "swipe"
 			elif draggable and absf(moved.x) >= absf(moved.y):
 				_gesture = "drag"
@@ -216,6 +252,7 @@ func _gui_input(event: InputEvent) -> void:
 
 func _lift(up: bool) -> void:
 	_hovered = up
+	_wake()
 	if _gesture != "drag":
 		z_index = 1 if up else 0
 	if Settings.reduce_motion or baking:
@@ -252,7 +289,7 @@ func _draw_overlay() -> void:
 	if price_text != "":
 		var badge := Rect2(Vector2(size.x - 22, -7), Vector2(26, 13))
 		_overlay.draw_style_box(UiTheme.box(UiTheme.GOLD, UiTheme.OUTLINE, 3), badge)
-		_overlay.draw_string(UiTheme.font, badge.position + Vector2(4, 10), price_text, HORIZONTAL_ALIGNMENT_LEFT, 22, 8, UiTheme.OUTLINE)
+		_overlay.draw_string(UiTheme.title_font, badge.position + Vector2(4, 10), price_text, HORIZONTAL_ALIGNMENT_LEFT, 22, 8, UiTheme.OUTLINE)
 
 
 static func _closed(points: PackedVector2Array) -> PackedVector2Array:
@@ -321,6 +358,12 @@ func _gloss(r: Rect2) -> void:
 ## The back the player picked in Settings (Settings.CARD_BACKS names them).
 func _draw_back(r: Rect2) -> void:
 	var body := _round_rect(r, 5.0)
+	var art := painting("back", str(Settings.card_back))
+	if art != null:
+		_draw_painting(body, r, art)
+		_outline(body, UiTheme.GOLD.darkened(0.2), 1.4)
+		_gloss(r)
+		return
 	var inner := r.grow(-maxf(3.0, r.size.x * 0.08))
 	match Settings.card_back:
 		1:
@@ -533,14 +576,14 @@ func _draw_playing(r: Rect2) -> void:
 	_outline(_round_rect(r.grow(-3.0), 3.0), PAPER_LINE, 0.6)
 	var k := r.size.x / 60.0
 	if card.has_rank():
-		var colour := UiTheme.RED_SUIT if card.suit == PlayingCard.Suit.HEARTS or card.suit == PlayingCard.Suit.DIAMONDS else UiTheme.BLACK_SUIT
+		var colour := suit_colour(card.suit)
 		_draw_index(k, colour)
 		draw_set_transform(r.size, PI)
 		_draw_index(k, colour)
 		draw_set_transform(Vector2.ZERO)
 		if card.enhancement == "enh_motley":
 			for s in 4:
-				draw_suit(self, r.get_center() + Vector2(((s % 2) - 0.5) * 18 * k, (int(s / 2) - 0.5) * 22 * k), 7.0 * k, s, [UiTheme.BLACK_SUIT, UiTheme.RED_SUIT][s % 2])
+				draw_suit(self, r.get_center() + Vector2(((s % 2) - 0.5) * 18 * k, (int(s / 2) - 0.5) * 22 * k), 7.0 * k, s, suit_colour(s))
 		elif card.rank >= 11 and card.rank <= 13:
 			_draw_face(r, k, colour)
 		elif card.rank == 14:
@@ -552,12 +595,12 @@ func _draw_playing(r: Rect2) -> void:
 				var at := area.position + Vector2(area.size.x * pip[0] / 2.0, area.size.y * pip[1])
 				draw_suit(self, at, 5.0 * k, card.suit, colour)
 	else:
-		draw_string(UiTheme.font, Vector2(4, r.size.y / 2.0 + 4), "MARBLE", HORIZONTAL_ALIGNMENT_CENTER, r.size.x - 8, 10, INK)
+		draw_string(UiTheme.title_font, Vector2(4, r.size.y / 2.0 + 4), "MARBLE", HORIZONTAL_ALIGNMENT_CENTER, r.size.x - 8, 10, INK)
 	if enh_def != null and card.enhancement != "enh_marble":
 		var band := Rect2(Vector2(4, r.size.y - 14), Vector2(r.size.x - 8, 10))
 		draw_colored_polygon(_round_rect(band, 2.0), _enhancement_tint(card.enhancement).darkened(0.3))
 		var short := UiTheme.name_of(card.enhancement).to_upper()
-		draw_string(UiTheme.font, band.position + Vector2(0, 8), short, HORIZONTAL_ALIGNMENT_CENTER, band.size.x, 8, UiTheme.TEXT)
+		draw_string(UiTheme.title_font, band.position + Vector2(0, 8), short, HORIZONTAL_ALIGNMENT_CENTER, band.size.x, 8, UiTheme.TEXT)
 	if SEAL_COLOURS.has(card.seal):
 		var at := Vector2(r.size.x - 9 * k, 9 * k)
 		_dot(at, 4.8 * k, SEAL_COLOURS[card.seal].darkened(0.45))
@@ -569,7 +612,7 @@ func _draw_playing(r: Rect2) -> void:
 ## The rank and a small suit in the top-left corner (drawn twice, once turned round).
 func _draw_index(k: float, colour: Color) -> void:
 	var rank_text := str(RANKS.get(card.rank, card.rank))
-	draw_string(UiTheme.font, Vector2(4, 14) * k, rank_text, HORIZONTAL_ALIGNMENT_LEFT, -1, int(round(14 * k)), colour)
+	draw_string(UiTheme.title_font, Vector2(4, 14) * k, rank_text, HORIZONTAL_ALIGNMENT_LEFT, -1, int(round(14 * k)), colour)
 	draw_suit(self, Vector2(9, 21) * k, 3.5 * k, card.suit, colour)
 
 
@@ -578,6 +621,11 @@ func _draw_index(k: float, colour: Color) -> void:
 func _draw_face(r: Rect2, k: float, colour: Color) -> void:
 	var frame := Rect2(Vector2(14, 14) * k, r.size - Vector2(28, 28) * k)
 	var back := _round_rect(frame, 2.0)
+	var art := painting("face", "%s_%s" % [SUIT_KEYS[card.suit], "jqk"[card.rank - 11]])
+	if art != null:
+		_draw_painting(back, frame, art)
+		_outline(back, colour, 1.0)
+		return
 	_gradient(back, colour.lerp(UiTheme.CARD, 0.82), colour.lerp(UiTheme.CARD, 0.6))
 	_outline(back, colour, 0.8)
 	var c := frame.get_center() + Vector2(0, 2 * k)
@@ -601,9 +649,20 @@ func _draw_face(r: Rect2, k: float, colour: Color) -> void:
 
 func _draw_named(r: Rect2) -> void:
 	var def := ContentDB.get_def(def_id)
+	if kind == "lazzo" and def != null:
+		_draw_duo(r, def)
+		return
 	var colour: Color = KIND_COLOURS.get(kind, UiTheme.PANEL_LIGHT)
 	if kind == "zanni" and def != null:
 		colour = RARITY_COLOURS[clampi(def.rarity, 0, 3)]
+	# Packs share one painting per kind of contents (pk_tarocchi_big → pack/tarocchi); a city
+	# without its own uses its deck's view.
+	var art := painting(kind, def_id if kind != "pack" else def_id.trim_prefix("pk_").get_slice("_", 0))
+	if art == null and kind == "city" and def != null and str(def.data.get("deck", "")) != "":
+		art = painting("deck", str(def.data["deck"]))
+	if art != null:
+		_draw_painted(r, art, colour, clampi(def.rarity, 0, 3) if kind == "zanni" and def != null else 0, kind == "zanni" and def != null)
+		return
 	var body := _round_rect(r, 5.0)
 	_gradient(body, colour.lightened(0.18), colour.darkened(0.2))
 	_outline(body, colour.lightened(0.5), 1.1)
@@ -618,8 +677,105 @@ func _draw_named(r: Rect2) -> void:
 	_draw_frame_marks(r, window, pane, colour, rarity, kind == "zanni" and def != null)
 	_draw_ribbon(r, window.end.y + 4, colour)
 	if sticker != "":
-		draw_string(UiTheme.font, Vector2(7, 13), sticker.left(1).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, UiTheme.GOLD)
+		draw_string(UiTheme.title_font, Vector2(7, 13), sticker.left(1).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, UiTheme.GOLD)
 	_gloss(r)
+
+
+## A card's painted picture, if it has one: res://art/<kind>/<id>.webp, painted for the game
+## (tools/art). Null otherwise, and the card is drawn in code as before.
+static func painting(art_kind: String, art_id: String) -> Texture2D:
+	var path := "res://art/%s/%s.webp" % [art_kind, art_id]
+	return load(path) if ResourceLoader.exists(path) else null
+
+
+## The painting stretched over `rect` (cropped at the sides to keep its proportions) and cut
+## to the rounded `shape`.
+func _draw_painting(shape: PackedVector2Array, rect: Rect2, tex: Texture2D) -> void:
+	_paintings.append(tex)
+	var crop := (rect.size.x / rect.size.y) / (float(tex.get_width()) / tex.get_height())
+	var uvs := PackedVector2Array()
+	for p in shape:
+		var u := (p - rect.position) / rect.size
+		uvs.append(Vector2(0.5 + (u.x - 0.5) * crop, u.y))
+	draw_colored_polygon(shape, Color.WHITE, uvs, tex)
+
+
+## A duo (Lazzo, batch 12): its two Jesters' paintings side by side, split on a gold
+## diagonal, each centred in its half; the duo's name below and a gold frame.
+func _draw_duo(r: Rect2, def: ContentDef) -> void:
+	var body := _round_rect(r, 5.0)
+	var parts: Array = def.data["parts"]
+	var w := r.size.x
+	var seam_top := Vector2(w * 0.6, 0)
+	var seam_bottom := Vector2(w * 0.4, r.size.y)
+	var halves := [
+		PackedVector2Array([Vector2(-1, -1), seam_top + Vector2(0, -1), seam_bottom + Vector2(0, 1), Vector2(-1, r.size.y + 1)]),
+		PackedVector2Array([seam_top + Vector2(0, -1), Vector2(w + 1, -1), Vector2(w + 1, r.size.y + 1), seam_bottom + Vector2(0, 1)]),
+	]
+	_gradient(body, Color("2a1240"), Color("120820"))
+	for i in 2:
+		var tex := painting("zanni", str(parts[i]))
+		var clipped := Geometry2D.intersect_polygons(body, halves[i])
+		if tex == null or clipped.is_empty():
+			continue
+		# Each painting is laid over the whole card width, shifted so its middle sits in its half.
+		var shift := w * (-0.22 if i == 0 else 0.22)
+		_draw_painting(clipped[0], Rect2(r.position + Vector2(shift, 0), r.size), tex)
+	var fade_top := r.size.y * 0.64
+	_gradient(_round_rect(Rect2(Vector2(0, fade_top), Vector2(w, r.size.y - fade_top)), 5.0), Color(0, 0, 0, 0.0), Color(0, 0, 0, 0.85))
+	draw_line(seam_top, seam_bottom, Color(0, 0, 0, 0.6), 2.4, true)
+	draw_line(seam_top, seam_bottom, UiTheme.GOLD, 1.0, true)
+	_draw_name(r)
+	_outline(body, UiTheme.GOLD, 1.8)
+	_outline(_round_rect(r.grow(-2.5), 3.5), Color(1, 1, 1, 0.2), 0.6)
+	_gloss(r)
+
+
+## A painted card: the painting edge to edge, the name in white over a soft dark fade at the
+## bottom, a thin frame in the card's colour (gold from Rare up), a Jester's rarity gems.
+func _draw_painted(r: Rect2, tex: Texture2D, colour: Color, rarity: int, gems: bool) -> void:
+	var body := _round_rect(r, 5.0)
+	_draw_painting(body, r, tex)
+	var fade_top := r.size.y * 0.64
+	_gradient(_round_rect(Rect2(Vector2(0, fade_top), Vector2(r.size.x, r.size.y - fade_top)), 5.0), Color(0, 0, 0, 0.0), Color(0, 0, 0, 0.85))
+	_draw_name(r)
+	_outline(body, UiTheme.GOLD if rarity >= 2 else colour.lightened(0.3), 1.6)
+	_outline(_round_rect(r.grow(-2.5), 3.5), Color(1, 1, 1, 0.16), 0.6)
+	if gems:
+		var k := r.size.x / 60.0
+		for i in rarity + 1:
+			var at := Vector2(r.size.x / 2.0 + (i - rarity / 2.0) * 6.5 * k, 5.5 * k)
+			_poly(_diamond(at, 2.6 * k, 3.4 * k), Color(0, 0, 0, 0.55))
+			_poly(_diamond(at, 1.9 * k, 2.6 * k), UiTheme.GOLD if rarity >= 2 else colour.lightened(0.45))
+	if sticker != "":
+		draw_string_outline(UiTheme.title_font, Vector2(6, 14), sticker.left(1).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, 3, Color(0, 0, 0, 0.8))
+		draw_string(UiTheme.title_font, Vector2(6, 14), sticker.left(1).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, UiTheme.GOLD)
+	_gloss(r)
+
+
+## The card's name in white at the bottom of a painting (shrinking to fit two lines).
+func _draw_name(r: Rect2) -> void:
+	var title := UiTheme.name_of(def_id) if def_id != "" else ""
+	var k := r.size.x / 60.0
+	var base := maxi(6, roundi(8.5 * k))
+	# One line if a slightly smaller size fits it ("Il Funambolo" read as "Il / Funambolo").
+	var font_size := base
+	var lines := [title]
+	while font_size > roundi(base * 0.8) and _widest(lines, font_size) > r.size.x - 6:
+		font_size -= 1
+	if _widest(lines, font_size) > r.size.x - 6:
+		font_size = base
+		lines = _wrap(title, r.size.x - 8, font_size)
+		while font_size > 5 and (lines.size() > 2 or _widest(lines, font_size) > r.size.x - 6):
+			font_size -= 1
+			lines = _wrap(title, r.size.x - 8, font_size)
+	lines = lines.slice(0, 2)
+	var line_h := font_size * 1.05
+	var y := r.size.y - 5.0 * k - (lines.size() - 1) * line_h
+	for line in lines:
+		draw_string_outline(UiTheme.title_font, Vector2(3, y), line, HORIZONTAL_ALIGNMENT_CENTER, r.size.x - 6, font_size, maxi(2, font_size / 4), Color(0, 0, 0, 0.7))
+		draw_string(UiTheme.title_font, Vector2(3, y), line, HORIZONTAL_ALIGNMENT_CENTER, r.size.x - 6, font_size, Color(1.0, 0.97, 0.9))
+		y += line_h
 
 
 ## The picture for a card without a hand-made design: a generated Jester, or the icon of a
@@ -643,6 +799,39 @@ func _draw_picture(window: Rect2, pane: PackedVector2Array, colour: Color, seed_
 			_draw_pack(window, colour)
 		"warrant":
 			_draw_scroll(window)
+		"favor":
+			_draw_medal(window)
+		"patron":
+			_draw_crown(window.get_center() + Vector2(0, window.size.y * 0.22), window.size.x * 0.42, UiTheme.MULT, 0.62)
+		"deck":
+			_draw_fan(window)
+
+
+## A Favor: a gold medal on two ribbon tails.
+func _draw_medal(window: Rect2) -> void:
+	var c := window.get_center() - Vector2(0, window.size.y * 0.06)
+	var s := minf(window.size.x, window.size.y) * 0.3
+	for side in [-1.0, 1.0]:
+		_poly(PackedVector2Array([c + Vector2(side * s * 0.05, s * 0.3), c + Vector2(side * s * 0.45, s * 0.3),
+			c + Vector2(side * s * 0.8, s * 1.45), c + Vector2(side * s * 0.4, s * 1.45)]),
+			UiTheme.MULT if side < 0 else UiTheme.POINTS)
+	_dot(c, s, UiTheme.GOLD.darkened(0.15))
+	_dot(c, s * 0.8, UiTheme.GOLD)
+	_draw_star(c, s * 0.45, UiTheme.GOLD.lightened(0.45))
+
+
+## A deck: three cards fanned out.
+func _draw_fan(window: Rect2) -> void:
+	var at := window.get_center() + Vector2(0, window.size.y * 0.3)
+	var s := window.size.y * 0.62
+	for i in 3:
+		var angle := -0.38 + i * 0.38
+		var card := PackedVector2Array()
+		for corner in [Vector2(-0.24, -0.95), Vector2(0.24, -0.95), Vector2(0.24, 0), Vector2(-0.24, 0)]:
+			card.append(at + (corner * s).rotated(angle))
+		_poly(card, UiTheme.CARD)
+		_outline(card, EDGE, 0.6)
+		draw_suit(self, at + (Vector2(0, -0.55) * s).rotated(angle), s * 0.12, i % 4, suit_colour(i % 4))
 
 
 ## The picture's frame and a Jester's rarity: gold edging and corner diamonds from Rare up,
@@ -688,14 +877,14 @@ func _draw_ribbon(r: Rect2, top: float, colour: Color) -> void:
 	_poly(band, colour.darkened(0.5))
 	var y := top + 1.0 + line_h
 	for line in lines:
-		draw_string(UiTheme.font, Vector2(4, y), line, HORIZONTAL_ALIGNMENT_CENTER, r.size.x - 8, font_size, UiTheme.TEXT)
+		draw_string(UiTheme.title_font, Vector2(4, y), line, HORIZONTAL_ALIGNMENT_CENTER, r.size.x - 8, font_size, UiTheme.TEXT)
 		y += line_h
 
 
 func _widest(lines: Array, font_size: int) -> float:
 	var widest := 0.0
 	for line in lines:
-		widest = maxf(widest, UiTheme.font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x)
+		widest = maxf(widest, UiTheme.title_font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x)
 	return widest
 
 
@@ -977,7 +1166,7 @@ func _wrap(text: String, width: float, font_size: int) -> Array:
 	var current := ""
 	for word in text.split(" "):
 		var attempt := word if current == "" else current + " " + word
-		if UiTheme.font.get_string_size(attempt, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x > width and current != "":
+		if UiTheme.title_font.get_string_size(attempt, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x > width and current != "":
 			lines.append(current)
 			current = word
 		else:

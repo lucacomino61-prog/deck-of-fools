@@ -753,3 +753,175 @@ t_giudizio.text,Create a random Jester (if there's a free Jester slot)
 t_mondo.name,Il Mondo
 t_mondo.gloss,The World
 t_mondo.text,Turn up to 3 selected cards into Clubs
+feat.jesters_5,Have 5 Jesters at once
+feat.jesters_6,Have 6 Jesters at once
+feat.won_run,Win a whole tour (all 8 towns)
+feat.won_with_burattinaio,Win a show with Il Burattinaio in your troupe
+feat.all_hands,"Play every poker hand at least once in one run (Pair, Straight, Full House...)"
+feat.ducats_50,Hold 50 ducats at once
+feat.patrons_8,Beat 8 Patrons in one run
+feat.patron_first_hand,Beat a Patron with your first hand of the show
+feat.identical_cards,Play two identical cards (same rank and suit) in one hand
+feat.points_1000,Reach more than 1000 Points (before Mult) in one hand
+feat.played_flush,Play a hand containing a Flush
+feat.played_straight_flush,Play a Straight Flush
+feat.won_on_last_hand,Win a show with your last hand
+feat.lost_to_patron,Lose a run to a Patron
+feat.lifetime:runs_lost>=5,Lose 5 runs (in total)
+feat.signs_20,Use 20 Signs in one run
+feat.level_5,Level any poker hand up to 5
+feat.enhanced_10,Have 10 enhanced cards in your deck
+feat.editions_3,"Have 3 cards with an edition (Silvered, Opaline...) in your deck"
+feat.interest_10,Earn 10 ducats of interest at one cash-out
+feat.lifetime:signs_used>=50,Use 50 Signs (in total)
+feat.won_with_one_jester,Win a show with only 1 Jester
+sc_servitore.name,Il Servitore di Due Padroni
+sc_burle.name,Le Burle di Arlecchino
+sc_serenata.name,La Serenata
+sc_dottore.name,Il Dottore Pedante
+sc_cena.name,La Cena di Pantalone
+sc_spaccone.name,Il Capitano Spaccone
+sc_fiera.name,La Fiera di Bergamo
+sc_ritorno.name,Il Ritorno di Flavio
+sc_pazzia.name,La Pazzia d'Isabella
+sc_finto_principe.name,Il Finto Principe
+sc_locandiera.name,La Locandiera
+sc_marito.name,Il Marito Geloso
+sc_pulcinella.name,Pulcinella Mago
+sc_ladro.name,Il Ladro Gentiluomo
+sc_lelio.name,Gli Amori di Lelio
+sc_naufragio.name,Il Naufragio
+sc_melarance.name,L'Amore delle Tre Melarance
+sc_re_cervo.name,Il Re Cervo
+sc_turandot.name,Turandot
+sc_maschere.name,L'Amore delle Maschere
+sc_gran_commedia.name,La Gran Commedia
+sc_rovescia.name,Il Mondo alla Rovescia
+sc_carnevale.name,Il Carnevale di Venezia
+sc_finale.name,La Commedia Finale
+c_bergamo.name,Bergamo
+c_bergamo.gloss,Arlecchino's home
+c_bergamo.text,Home crowd: +1 hand each show
+c_bergamo.lean,More Jesters in the shop
+c_milano.name,Milano
+c_milano.gloss,La Scala
+c_milano.text,"Targets x1.25, every show pays +3 ducats"
+c_milano.lean,Packs cost 1 less
+c_torino.name,Torino
+c_torino.gloss,The royal court
+c_torino.text,The Patron here pays double
+c_torino.lean,More Tarocchi in the shop
+c_genova.name,Genova
+c_genova.gloss,The port
+c_genova.text,Cards sell for double
+c_genova.lean,Packs cost 1 less
+c_venezia.name,Venezia
+c_venezia.gloss,Carnevale
+c_venezia.text,Every Jester starts each show masked (face down) until it first does something
+c_venezia.lean,Editions twice as often
+c_padova.name,Padova
+c_padova.gloss,The university
+c_padova.text,Signs level a hand twice
+c_padova.lean,More Signs in the shop
+c_verona.name,Verona
+c_verona.gloss,The lovers
+c_verona.text,Each scored Heart: +3 Mult
+c_verona.lean,Half the cards in packs are Hearts
+c_mantova.name,Mantova
+c_mantova.gloss,The Gonzaga court
+c_mantova.text,"The first hand of each show x2, the last hand x0.5"
+c_mantova.lean,Rare Jesters twice as often
+c_ferrara.name,Ferrara
+c_ferrara.gloss,The chequered floor
+c_ferrara.text,Hands that alternate red and black cards: x1.5 Mult
+c_ferrara.lean,More playing-card packs
+c_bologna.name,Bologna
+c_bologna.gloss,The doctors
+c_bologna.text,Each discard grows your hand by 1 card for the show (up to +2)
+c_bologna.lean,More Tarocchi in the shop
+c_firenze.name,Firenze
+c_firenze.gloss,The painters
+c_firenze.text,Each scored face card: +10 Points
+c_firenze.lean,Enhanced playing cards in the shop
+c_siena.name,Siena
+c_siena.gloss,The Palio
+c_siena.text,The first hand worth half the target pays +5 ducats
+c_siena.lean,Rerolls cost 1 less
+c_pisa.name,Pisa
+c_pisa.gloss,The leaning tower
+c_pisa.text,Straights may skip one rank
+c_pisa.lean,More Jesters in the shop
+c_lucca.name,Lucca
+c_lucca.gloss,The walls
+c_lucca.text,"-1 discard, +1 hand"
+c_lucca.lean,The Warrant costs 2 less
+c_roma.name,Roma
+c_roma.gloss,The Colosseum
+c_roma.text,"The Patron's target x1.5, but it pays triple"
+c_roma.lean,Rare Jesters twice as often
+c_napoli.name,Napoli
+c_napoli.gloss,Vesuvius
+c_napoli.text,"After your 2nd hand each show, 2 cards in your draw pile turn to Marble"
+c_napoli.lean,Omen packs four times as often
+c_palermo.name,Palermo
+c_palermo.gloss,The puppet theatre
+c_palermo.text,Jesters fire right to left
+c_palermo.lean,Jester packs three times as often
+c_benevento.name,Benevento
+c_benevento.gloss,The witches
+c_benevento.text,Omens can appear in the shop
+c_benevento.lean,Omens
+c_bari.name,Bari
+c_bari.gloss,The sea
+c_bari.text,+1 card in hand
+c_bari.lean,More Signs in the shop
+c_amalfi.name,Amalfi
+c_amalfi.gloss,The lemon groves
+c_amalfi.text,Gilt cards pay double
+c_amalfi.lean,Enhanced playing cards in the shop
+c_parma.name,Parma
+c_parma.gloss,Teatro Regio
+c_parma.text,Each scored number card: +5 Points
+c_parma.lean,More playing-card packs
+c_urbino.name,Urbino
+c_urbino.gloss,The ideal city
+c_urbino.text,Hands of exactly 5 cards: x1.5 Mult
+c_urbino.lean,The Warrant costs 2 less
+c_trieste.name,Trieste
+c_trieste.gloss,The bora wind
+c_trieste.text,"After each discard, 1 random card in your hand blows away too"
+c_trieste.lean,Rerolls cost 1 less
+c_messina.name,Messina
+c_messina.gloss,Scylla and Charybdis
+c_messina.text,"On arrival, choose: -1 hand each show, or targets x1.25"
+c_messina.lean,Omens can appear in the shop
+lz_sposi.name,Arlecchino e Colombina
+lz_sposi.text,"+3 Mult for each Jester to its left; each scored Queen +25 Points, +5 Mult"
+lz_vecchi.name,I Vecchi
+lz_vecchi.text,"Gains +1.5 Mult for good every time you buy in the shop; +70 Points if exactly 5 cards are played"
+lz_isabella_flavio.name,Isabella e Flavio
+lz_isabella_flavio.text,"Hand contains a Pair: +25 Points, +8 Mult; Two Pair: a further +30 Points, +9 Mult"
+lz_bravacci.name,I Bravacci
+lz_bravacci.text,+18 Mult on the first hand of each show; each scored Jack x1.3 Mult
+lz_due_zanni.name,Primo e Secondo Zanni
+lz_due_zanni.text,At cash-out +1.5 ducats per unused discard; +6 ducats whenever you skip a show
+lz_napoli.name,Napoli Nobilissima
+lz_napoli.text,"Each scored card of the first card's suit +3 Mult; hand contains a Straight: +90 Points, +6 Mult"
+lz_pierrot.name,Le Lacrime di Pierrot
+lz_pierrot.text,+4.5 Mult per hand already played this show; +4.5 Mult per card played
+lz_sorpresa.name,La Sorpresa dell'Amore
+lz_sorpresa.text,Each scored Mirror card x1.75 Mult; each Heart held in hand +3 Mult
+lz_vedova.name,La Vedova Scaltra
+lz_vedova.text,"Full House: +75 Points, +12 Mult; Four of a Kind: +90 Points, +15 Mult"
+lz_tartaglia.name,Il Principe Tartaglia
+lz_tartaglia.text,"Each scored 2, 3 or 4 +5 Mult; each scored King +25 Points, +3 Mult"
+lz_locandiera.name,La Locandiera
+lz_locandiera.text,At cash-out +5 ducats; each scored Diamond: 1 in 2 chance of +5 ducats
+lz_gelosi.name,I Gelosi
+lz_gelosi.text,Each scored Queen x3.25 Mult; winning a show levels your most played hand
+lz_rivalita.name,La Rivalità
+lz_rivalita.text,Every scored card scores one extra time; gains x0.75 Mult per Sign used
+lz_burattini.name,Il Teatro dei Burattini
+lz_burattini.text,Copies the Jester to its right; +15 Points per Jester owned
+lz_primo_arlecchino.name,Il Primo Arlecchino
+lz_primo_arlecchino.text,Each Jester to its left x1.75 Mult and +3 Mult

@@ -129,9 +129,9 @@ static func _rares() -> void:
 
 static func _legendaries() -> void:
 	var martinelli := func(ctx: ScoreContext, item: ItemCard) -> void:
-		var left := ctx.run.zanni.find(item)
-		if left > 0:
-			ctx.x_mult(pow(1.5, left), ctx.run.item_source(item))
+		# One ×1.5 per Jester, so a duo grows each of them (batch 12).
+		for i in ctx.run.position_of(item):
+			ctx.x_mult(1.5, ctx.run.item_source(item))
 	_add("z_martinelli", LEGENDARY_COST, LEGENDARY, {"independent": martinelli})
 
 	_add("z_andreini", LEGENDARY_COST, LEGENDARY,

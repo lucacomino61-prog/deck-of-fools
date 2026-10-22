@@ -7,13 +7,20 @@ extends RefCounted
 ## is what cloud saves, the daily run and leaderboard checks rely on.
 ##
 ## Actions (Dictionaries, "a" = name):
-##   select_show · skip_show · play {cards} · discard {cards} · cash_out
+##   select_show {perform} · skip_show · play {cards} · discard {cards} · cash_out
 ##   buy {slot} · buy_pack {slot} · buy_warrant · sell {zone, index} · reroll
 ##   use {index, cards} · reorder_zanni {order} · swap_patron · leave_shop
+##   merge {index, other}                   (two Jesters of a duo become its Lazzo)
 ##   pick {index, cards} · skip_pack        (while a pack is open)
+##   travel {index, slot}                   (on the map: the next city, and its choice if any)
+##   encore · bow · play {cards}            (when the crowd demands an Encore)
+##
+## Batch 12 (the tour) only runs on a city deck, which gives the run a route: the Map of
+## Italy, the city twists, Scenarios, the crowd's mood and the Encore. A run on any other
+## deck (the rules tests' stand-in) plays the classic rules.
 
-## PACK was added last so saved phase numbers keep their meaning.
-enum Phase { CHOOSE_SHOW, IN_SHOW, CASH_OUT, SHOP, LOST, PACK }
+## PACK, MAP and ENCORE were added last so saved phase numbers keep their meaning.
+enum Phase { CHOOSE_SHOW, IN_SHOW, CASH_OUT, SHOP, LOST, PACK, MAP, ENCORE }
 
 const PATRON_SWAP_COST := 10
 ## Il Gemello: the Favor that doubles the next one you take.
@@ -23,7 +30,19 @@ const FAVOR_TWIN := "f_gemello"
 const PERISH_SHOWS := 5
 const RENT := 3
 
-const SAVE_VERSION := 1
+## The crowd (batch 12): mood runs 0–10 and starts each show at 5. At 10 the next hand
+## gets ×1.5 Mult and the mood drops to 7; at 0 the show pays 3 ducats less. Winning with
+## mood 8 or more brings an Encore: one more hand against half the target, which doubles
+## the cash-out or loses the show's reward.
+const MOOD_START := 5
+const MOOD_MAX := 10
+const OVATION_XMULT := 1.5
+const OVATION_AFTER := 7
+const WALKOUT_DUCATS := 3
+const ENCORE_MOOD := 8
+const ENCORE_SHARE := 0.5
+
+const SAVE_VERSION := 2
 
 const BASE_STATS := {
 	"hands": 4,
@@ -111,6 +130,27 @@ const BASE_STATS := {
 	"all_eternal": 0,
 	"all_perishable": 0,
 	"all_rented": 0,
+	## City twists and shop leans (batch 12).
+	## What a card sells for, in percent of normal.
+	"sell_pct": 100,
+	## Ducats off every booster pack, and off the Warrant.
+	"pack_discount": 0,
+	"warrant_discount": 0,
+	## How often Jesters fill shop slots, and how often a shop Jester is rare, in percent.
+	"zanni_rate_pct": 100,
+	"rare_rate_pct": 100,
+	## Shop weight of each kind of booster pack, in percent of normal.
+	"pack_tarocchi_pct": 100,
+	"pack_sign_pct": 100,
+	"pack_card_pct": 100,
+	"pack_zanni_pct": 100,
+	"pack_omen_pct": 100,
+	## Above 0, half the playing cards from packs and the shop are Hearts.
+	"pack_hearts": 0,
+	## Above 0, Jesters fire right to left.
+	"reverse_jesters": 0,
+	## Gilt cards' ducats are multiplied by this.
+	"gilt_mult": 1,
 }
 
 ## Hooks a copying Jester (data "copies": "right" or "leftmost") borrows from its target.
@@ -189,6 +229,30 @@ var seen: Dictionary = {}
 ## Unlock feats achieved this run, by name (see Unlocks).
 var feats: Dictionary = {}
 
+## The tour (batch 12). On when the deck has a home city.
+var tour := false
+## The Map of Italy: one row per town, each a list of {city, to: [columns in the next row]}.
+var route: Array = []
+## Where the troupe is: its row on the route and column in it, the city, and the option
+## chosen on arrival in a city that asks for one (Messina). The row only moves forward,
+## even when a card sends the town number back (La Clessidra).
+var route_row := 0
+var route_col := 0
+## The column the troupe took in each row so far (the first is home).
+var path: Array[int] = []
+var city := ""
+var town_option := 0
+## This show's Scenario, whether it's being performed, and the next beat (0–2).
+var scenario := ""
+var scenario_on := false
+var scenario_beat := 0
+## The crowd's mood (0–10) and a standing ovation waiting for the next hand.
+var mood := MOOD_START
+var ovation := false
+## While a duo fires its parts: their numbers' growth, and the duo itself (for their seat).
+var duo_scale := 1.0
+var duo_item: ItemCard = null
+
 
 ## A new run. `challenge_id` sets up a challenge run; `locked_ids` are the cards the
 ## player's profile hasn't unlocked yet, which never turn up in this run.
@@ -202,6 +266,7 @@ static func create(seed_value: String, deck := "standard", stake_level := 1, cha
 	for id in locked_ids:
 		run.locked[str(id)] = true
 	run._build_deck()
+	run._plan_route()
 	run.ducats = run.stat("start_ducats")
 	run.fire_all("run_start", run)
 	run._start_town()
@@ -234,16 +299,42 @@ func rng(stream: String) -> ZRng:
 ## isn't counted (no chance comes up, and random amounts come from other streams), so a
 ## preview never gives away the run's rolls. -1 when the cards can't be played.
 func preview(ids: Array) -> float:
-	if phase != Phase.IN_SHOW or hands_left <= 0 or not _forced_included(ids):
-		return -1.0
-	var copy := RunState.from_dict(to_dict())
-	copy.previewing = true
-	copy._rngs.clear()
+	return float(preview_detail(ids).get("total", -1.0))
+
+
+## The preview's whole scoring summary (total, hand, events with their sources: what each
+## card and Jester adds); empty when the cards can't be played.
+func preview_detail(ids: Array) -> Dictionary:
+	var encore_live: bool = phase == Phase.ENCORE and show_counters.get("encore", "") == "live"
+	if not encore_live and (phase != Phase.IN_SHOW or hands_left <= 0 or not _forced_included(ids)):
+		return {}
+	var copy := _preview_copy()
 	var played := copy._take_from_hand(ids)
 	if played.is_empty():
-		return -1.0
+		return {}
 	var held: Array[PlayingCard] = copy.hand.duplicate()
-	return Scorer.score(copy, played, held).total
+	return Scorer.score(copy, played, held).summary()
+
+
+## What the Jester at `index` adds on its own right now (its value from what it has grown
+## or from the run: ducats, the deck, discards left…), as scoring events; it doesn't count
+## anything that depends on the cards played.
+func jester_now(index: int) -> Array:
+	if index < 0 or index >= zanni.size() or zanni[index].debuffed:
+		return []
+	var copy := _preview_copy()
+	var ctx := ScoreContext.new()
+	ctx.run = copy
+	ctx.held.assign(copy.hand)
+	copy.fire_item(copy.zanni[index], "independent", ctx)
+	return ctx.events
+
+
+func _preview_copy() -> RunState:
+	var copy := RunState.from_dict(to_dict(false))
+	copy.previewing = true
+	copy._rngs.clear()
+	return copy
 
 
 ## A rule value after every deck, stake, warrant, zanni and patron has adjusted it.
@@ -288,7 +379,7 @@ func copy_target(item: ItemCard) -> ItemCard:
 		var how := str(current.def().data.get("copies", ""))
 		if how == "":
 			return current if current != item else null
-		var i := zanni.find(current)
+		var i := position_of(current)
 		var j := i + 1 if how == "right" else 0
 		if j < 0 or j >= zanni.size() or j == i:
 			return null
@@ -307,10 +398,61 @@ func fire_all(hook: String, subject: Object, extra := []) -> void:
 
 
 ## An "N in M" chance from the named stream, scaled by the luck stat (never, in a preview).
+## A duo's Jesters get one step luckier (1 in 3 becomes 1 in 2).
 func roll(stream: String, numerator: int, denominator: int) -> bool:
 	if previewing:
 		return false
-	return rng(stream).chance(minf(1.0, float(numerator * stat("luck")) / denominator))
+	return rng(stream).chance(minf(1.0, float(numerator * stat("luck")) * duo_scale / denominator))
+
+
+## A Jester's seat in the row; a duo's Jesters sit where the duo does. -1 if not owned.
+func position_of(item: ItemCard) -> int:
+	var i := zanni.find(item)
+	if i >= 0:
+		return i
+	for j in zanni.size():
+		if zanni[j].parts.has(item):
+			return j
+	return -1
+
+
+## The owned Jesters in the order they fire: left to right, or right to left where a city
+## turns them round (Palermo).
+func firing_order() -> Array[ItemCard]:
+	if stat("reverse_jesters") <= 0:
+		return zanni
+	var order: Array[ItemCard] = zanni.duplicate()
+	order.reverse()
+	return order
+
+
+## An amount a duo's Jester adds, grown by duo_scale: rounded to `step` from 10 up (Points
+## to 5s), else to whole numbers. Unchanged outside a duo.
+func duo_amount(amount: float, step: float) -> float:
+	if duo_scale == 1.0:
+		return amount
+	var grown := amount * duo_scale
+	if step > 1.0 and absf(grown) >= 10.0:
+		return roundf(grown / step) * step
+	return roundf(grown)
+
+
+## A ×Mult a duo's Jester gives grows by half its bonus (×1.5 → ×1.75).
+func duo_factor(factor: float) -> float:
+	if duo_scale == 1.0:
+		return factor
+	return snappedf(1.0 + (factor - 1.0) * duo_scale, 0.01)
+
+
+## What the town's Warrant costs after a city's discount (never below 1).
+func warrant_price(def_id: String) -> int:
+	var def := ContentDB.get_def(def_id)
+	return maxi(1, def.cost - stat("warrant_discount")) if def != null else 0
+
+
+## The single-hand score an Encore has to reach.
+func encore_target() -> float:
+	return floorf(show_target * ENCORE_SHARE)
 
 
 ## Fires `hook` on a playing card's enhancement, edition and seal, as hook(subject, null, card).
@@ -424,7 +566,7 @@ func eval_options() -> Dictionary:
 func item_source(item: ItemCard) -> String:
 	if _copy_label != "":
 		return _copy_label
-	return "zanni:%s#%d" % [item.def_id, zanni.find(item)]
+	return "zanni:%s#%d" % [item.def_id, position_of(item)]
 
 
 func add_card(rank: int, suit: int) -> PlayingCard:
@@ -472,9 +614,10 @@ func current_patron() -> String:
 	return str(show_counters.get("patron", ""))
 
 
-## Everything that can react to the run, in firing order: deck, challenge, stakes, warrants,
-## zanni (each followed by its edition), consumables' editions, pending favors, then the
-## current patron while its show is on, unless the sources before it mute patrons.
+## Everything that can react to the run, in firing order: deck, challenge, stakes, the city,
+## warrants, zanni (each followed by its edition), consumables' editions, pending favors, then
+## the current patron while its show is on, unless the sources before it mute patrons; last,
+## during a show on tour, the Scenario's and the crowd's rules.
 func _sources() -> Array:
 	var out := []
 	var deck_def := ContentDB.get_def(deck_id)
@@ -486,6 +629,9 @@ func _sources() -> Array:
 	for d in ContentDB.pool("stake"):
 		if int(d.data.get("level", 0)) <= stake:
 			out.append([d, null])
+	var city_def := ContentDB.get_def(city)
+	if city_def != null:
+		out.append([city_def, null])
 	for w in warrants:
 		var d := ContentDB.get_def(w)
 		if d != null:
@@ -512,6 +658,11 @@ func _sources() -> Array:
 		var p := ContentDB.get_def(current_patron())
 		if p != null:
 			out.append([p, null])
+	if phase == Phase.IN_SHOW and tour:
+		for rule in [ScenarioCards.RULE_SCENARIO, ScenarioCards.RULE_CROWD]:
+			var d := ContentDB.get_def(rule)
+			if d != null:
+				out.append([d, null])
 	return out
 
 
@@ -522,11 +673,11 @@ func apply(action: Dictionary) -> Dictionary:
 	var result: Dictionary
 	match a["a"]:
 		"select_show":
-			result = _select_show()
+			result = _select_show(bool(a.get("perform", false)))
 		"skip_show":
 			result = _skip_show()
 		"play":
-			result = _play(a.get("cards", []))
+			result = _encore_play(a.get("cards", [])) if phase == Phase.ENCORE else _play(a.get("cards", []))
 		"discard":
 			result = _discard(a.get("cards", []))
 		"cash_out":
@@ -553,6 +704,14 @@ func apply(action: Dictionary) -> Dictionary:
 			result = _buy_warrant(int(a.get("index", 0)))
 		"swap_patron":
 			result = _swap_patron()
+		"merge":
+			result = _merge(int(a.get("index", -1)), int(a.get("other", -1)))
+		"travel":
+			result = _travel(int(a.get("index", -1)), int(a.get("slot", 0)))
+		"encore":
+			result = _encore()
+		"bow":
+			result = _bow()
 		_:
 			result = _fail("unknown action")
 	if result["ok"]:
@@ -597,12 +756,17 @@ func _update_feats() -> void:
 		feats["editions_3"] = true
 
 
-func _select_show() -> Dictionary:
+## Starts the show; `perform` takes on its Scenario (on tour), otherwise the troupe improvises.
+func _select_show(perform := false) -> Dictionary:
 	if phase != Phase.CHOOSE_SHOW:
 		return _fail("not choosing a show")
 	phase = Phase.IN_SHOW
 	show_score = 0.0
 	show_counters = {"hands_played": 0, "discards_used": 0, "types": []}
+	scenario_on = perform and tour and scenario != ""
+	scenario_beat = 0
+	mood = MOOD_START
+	ovation = false
 	for card in full_deck:
 		card.debuffed = false
 		card.face_down = false
@@ -687,6 +851,8 @@ func _play(ids: Array) -> Dictionary:
 			discard_pile.append(card)
 	_hand_feats(ctx)
 	fire_all("hand_played", self, [played])
+	if tour:
+		_crowd_reacts(ctx)
 	if show_score >= show_target:
 		_win_show()
 	elif hands_left == 0:
@@ -696,6 +862,42 @@ func _play(ids: Array) -> Dictionary:
 		if hand.is_empty():
 			_lose_or_rescue()
 	return _ok(ctx.summary())
+
+
+## After a hand on tour: the Scenario moves on a beat or collapses (a Fiasco), and the
+## crowd's mood follows the hand's share of the target. A standing ovation spends itself on
+## the hand it boosted; a mood of 0 means the crowd walked out (3 ducats less at cash-out).
+func _crowd_reacts(ctx: ScoreContext) -> void:
+	var share := ctx.total / maxf(show_target, 1.0)
+	var delta := -2
+	if share >= 0.5:
+		delta = 3
+	elif share >= 0.25:
+		delta = 2
+	elif share >= 0.1:
+		delta = 1
+	if scenario_on:
+		if bool(ctx.flags.get("beat", false)):
+			delta += 1
+			scenario_beat += 1
+			show_counters["beats"] = scenario_beat
+			if scenario_beat >= ScenarioCards.BEATS:
+				scenario_on = false
+				show_counters["scenario"] = "done"
+		else:
+			delta -= 3
+			scenario_on = false
+			show_counters["scenario"] = "fiasco"
+			_count("fiascos")
+	if ovation:
+		ovation = false
+		mood = OVATION_AFTER
+	mood = clampi(mood + delta, 0, MOOD_MAX)
+	if mood >= MOOD_MAX:
+		ovation = true
+		_count("ovations")
+	if mood <= 0:
+		show_counters["walkout"] = true
 
 
 ## False when a card the run forces you to use (show_counters "forced") is in hand but
@@ -848,8 +1050,12 @@ func _sell(zone: String, index: int) -> Dictionary:
 	var item := list[index]
 	if bool(item.state.get("eternal", false)):
 		return _fail("this card can't be sold")
-	var value := item.sell_value()
+	var value := item.sell_value() * stat("sell_pct") / 100
 	list.remove_at(index)
+	# A Jester that holds a one-use slot (Il Carro di Tespi) can't leave a card without one.
+	if zone == "zanni" and consumables.filter(func(c: ItemCard) -> bool: return not _takes_no_slot(c)).size() > stat("consumable_slots"):
+		list.insert(index, item)
+		return _fail("use or sell a one-use card first: this Jester holds one of their slots")
 	ducats += value
 	_count("sold")
 	item.fire("sold", [self, item])
@@ -858,11 +1064,14 @@ func _sell(zone: String, index: int) -> Dictionary:
 
 
 ## What an offer or pack costs right now: 0 if a Favor made it free, otherwise after shop
-## discounts and never below 1.
+## discounts (and a city's pack discount; packs are the offers without a "kind") and never
+## below 1.
 func offer_price(offer: Dictionary) -> int:
 	if bool(offer.get("free", false)):
 		return 0
 	var cost := int(offer["cost"]) * (100 - stat("shop_discount_pct")) / 100
+	if not offer.has("kind"):
+		cost -= stat("pack_discount")
 	return maxi(1, cost - stat("shop_discount"))
 
 
@@ -1025,15 +1234,16 @@ func _buy_warrant(index: int) -> Dictionary:
 	if on_sale == "" or sold:
 		return _fail("no Warrant on sale")
 	var def := ContentDB.get_def(on_sale)
-	if ducats - def.cost < -stat("debt_limit"):
+	var price := warrant_price(on_sale)
+	if ducats - price < -stat("debt_limit"):
 		return _fail("not enough ducats")
-	ducats -= def.cost
+	ducats -= price
 	if index == 0:
 		warrant_bought = true
 	else:
 		shop.extra_bought = true
 	_count("purchases")
-	fire_all("buy", self, [ItemCard.make(def.id, def.cost)])
+	fire_all("buy", self, [ItemCard.make(def.id, price)])
 	warrants.append(def.id)
 	def.fire("gain", [self, null])
 	return _ok({})
@@ -1116,15 +1326,164 @@ func _start_town() -> void:
 	warrant_bought = false
 	town_swaps = 0
 	town_played = {}
+	_roll_scenario()
 
 
+# --- the tour (batch 12) ---
+
+## The deck's home city starts the route; without one the run plays the classic rules.
+func _plan_route() -> void:
+	var home := CityCards.home_of(deck_id, self)
+	if home == "":
+		return
+	tour = true
+	route = RouteMap.plan(self, home)
+	route_row = 0
+	route_col = 0
+	path.assign([0])
+	city = home
+
+
+## Makes sure the route has a row after the troupe's (endless play grows it).
+func _extend_route() -> void:
+	while route.size() < route_row + 2:
+		RouteMap.extend(self, route)
+
+
+## The roads out of the troupe's city: columns in the next row.
+func roads() -> Array:
+	if route_row >= route.size():
+		return []
+	return ((route[route_row] as Array)[route_col] as Dictionary)["to"]
+
+
+## The next show's Scenario, drawn from the tier for this town.
+func _roll_scenario() -> void:
+	scenario = ""
+	if tour:
+		scenario = ScenarioCards.pick(self, rng("scenario"))
+
+
+## Moves to a city in the next row that the current one has a road to. `option` answers a
+## city that asks on arrival (Messina).
+func _travel(col: int, option: int) -> Dictionary:
+	if phase != Phase.MAP:
+		return _fail("not on the map")
+	var row: Array = route[route_row + 1]
+	if col < 0 or col >= row.size() or not roads().has(col):
+		return _fail("no road to that city")
+	var dest := str((row[col] as Dictionary)["city"])
+	var options: Array = ContentDB.get_def(dest).data.get("options", [])
+	if not options.is_empty() and (option < 0 or option >= options.size()):
+		return _fail("choose one of the city's options")
+	route_row += 1
+	route_col = col
+	path.append(col)
+	city = dest
+	town_option = option if not options.is_empty() else 0
+	_count("cities")
+	_start_town()
+	return _ok({"city": city})
+
+
+## The crowd demands an Encore: refill the hand and play one more hand.
+func _encore() -> Dictionary:
+	if phase != Phase.ENCORE or show_counters.get("encore", "") != "offered":
+		return _fail("no Encore on offer")
+	show_counters["encore"] = "live"
+	_draw_to_full()
+	return _ok({"target": encore_target()})
+
+
+## Takes a bow instead of an Encore: the cash-out as it stands.
+func _bow() -> Dictionary:
+	if phase != Phase.ENCORE or show_counters.get("encore", "") == "live":
+		return _fail("no Encore to turn down")
+	show_counters["encore"] = "bowed"
+	phase = Phase.CASH_OUT
+	return _ok({})
+
+
+## The Encore's hand: reach half the show's target in one hand to double the cash-out;
+## miss and the show's own reward is lost.
+func _encore_play(ids: Array) -> Dictionary:
+	if show_counters.get("encore", "") != "live":
+		return _fail("no Encore on")
+	var played := _take_from_hand(ids)
+	if played.is_empty():
+		return _fail("pick 1 to %d cards from your hand" % stat("max_play"))
+	var held: Array[PlayingCard] = hand.duplicate()
+	var ctx := Scorer.score(self, played, held)
+	_count("hands_played")
+	counters["best_hand"] = maxf(float(counters.get("best_hand", 0.0)), ctx.total)
+	for card in ctx.destroyed:
+		destroy_card(card)
+	for card in played:
+		if not ctx.destroyed.has(card):
+			discard_pile.append(card)
+	var hit := ctx.total >= encore_target()
+	if hit:
+		var total := 0
+		for p in payout:
+			total += int(p["v"])
+		if total > 0:
+			payout.append({"src": "encore", "v": total})
+		_count("encores")
+	else:
+		payout = payout.filter(func(p: Dictionary) -> bool: return p["src"] != "show")
+	show_counters["encore"] = "hit" if hit else "missed"
+	phase = Phase.CASH_OUT
+	var out := ctx.summary()
+	out["encore"] = hit
+	return _ok(out)
+
+
+## Merges the two Jesters of a duo into its Lazzo card: one slot, both effects stronger.
+## The duo takes the first edition either had, and any sticker either had.
+func _merge(a: int, b: int) -> Dictionary:
+	if phase != Phase.SHOP:
+		return _fail("merge in the shop")
+	if a < 0 or b < 0 or a >= zanni.size() or b >= zanni.size() or a == b:
+		return _fail("pick two of your Jesters")
+	var duo_id := LazziCards.duo_of(zanni[a].def_id, zanni[b].def_id)
+	if duo_id == "":
+		return _fail("these two have no routine together")
+	var first := zanni[a]
+	var second := zanni[b]
+	var duo := ItemCard.make(duo_id, first.cost + second.cost, first.edition if first.edition != "" else second.edition)
+	var order: Array = ContentDB.get_def(duo_id).data["parts"]
+	duo.parts.assign([first, second] if order[0] == first.def_id else [second, first])
+	for part in duo.parts:
+		for key in ["eternal", "rented"]:
+			if bool(part.state.get(key, false)):
+				duo.state[key] = true
+		if part.state.has("perish"):
+			duo.state["perish"] = mini(int(duo.state.get("perish", PERISH_SHOWS)), int(part.state["perish"]))
+		for key in ["eternal", "rented", "perish", "perished"]:
+			part.state.erase(key)
+		part.edition = ""
+		part.debuffed = false
+	zanni[mini(a, b)] = duo
+	zanni.remove_at(maxi(a, b))
+	see(duo_id)
+	_count("merges")
+	return _ok({"duo": duo_id})
+
+
+## On to the next show; after the Patron, the next town (on tour, by way of the map).
 func _advance_show() -> void:
 	show_index += 1
 	if show_index > Shows.PATRON:
 		town += 1
-		_start_town()
+		if tour:
+			_extend_route()
+			show_index = Shows.MATINEE
+			phase = Phase.MAP
+		else:
+			_start_town()
 	else:
 		phase = Phase.CHOOSE_SHOW
+		_roll_scenario()
 
 
 func _win_show(rescued := false) -> void:
@@ -1148,6 +1507,9 @@ func _win_show(rescued := false) -> void:
 	fire_all("show_end", self)
 	_age_perishables()
 	payout = _compute_payout(rescued)
+	if tour and not rescued and mood >= ENCORE_MOOD:
+		phase = Phase.ENCORE
+		show_counters["encore"] = "offered"
 
 
 ## Perishable Jesters count down one show each win; at 0 they stop working for good.
@@ -1175,6 +1537,14 @@ func _compute_payout(rescued := false) -> Array[Dictionary]:
 	var per_discard := stat("discard_reward")
 	if discards_left > 0 and per_discard > 0:
 		items.append({"src": "discards", "v": discards_left * per_discard})
+	var beats := int(show_counters.get("beats", 0))
+	var scenario_pay := 0
+	for b in beats:
+		scenario_pay += ScenarioCards.BEAT_DUCATS[b]
+	if scenario_pay > 0:
+		items.append({"src": "scenario", "v": scenario_pay})
+	if bool(show_counters.get("walkout", false)):
+		items.append({"src": "crowd", "v": -WALKOUT_DUCATS})
 	for z in zanni:
 		if bool(z.state.get("rented", false)):
 			items.append({"src": item_source(z), "v": -RENT})
@@ -1282,6 +1652,8 @@ func _kind_weight(kind: String) -> float:
 		return base * stat("tarocchi_rate_pct") / 100.0
 	if kind == "sign":
 		return base * stat("sign_rate_pct") / 100.0
+	if kind == "zanni":
+		return base * stat("zanni_rate_pct") / 100.0
 	return base
 
 
@@ -1322,8 +1694,10 @@ func _pick_rarity(pool: Array[ContentDef], r: ZRng) -> Array[ContentDef]:
 	for d in pool:
 		by_rarity[clampi(d.rarity, 0, 2)].append(d)
 	var weights := []
+	var rare_pct := stat("rare_rate_pct")
 	for i in 3:
-		weights.append(ZANNI_RARITY_WEIGHTS[i] if not by_rarity[i].is_empty() else 0)
+		var w: float = ZANNI_RARITY_WEIGHTS[i] if not by_rarity[i].is_empty() else 0
+		weights.append(w * rare_pct / 100.0 if i == 2 and rare_pct != 100 else w)
 	var picked: Array[ContentDef] = []
 	picked.assign(by_rarity[r.pick_weighted(weights)])
 	return picked
@@ -1379,21 +1753,26 @@ static func _normalize(action: Dictionary) -> Dictionary:
 			for x in action[key]:
 				ints.append(int(x))
 			a[key] = ints
-	for key in ["slot", "index"]:
+	for key in ["slot", "index", "other"]:
 		if action.has(key):
 			a[key] = int(action[key])
 	if action.has("zone"):
 		a["zone"] = str(action["zone"])
+	if bool(action.get("perform", false)):
+		a["perform"] = true
 	return a
 
 
 # --- saving ---
 
-func to_dict() -> Dictionary:
+## The whole run as plain data. A save (for_save) is JSON-safe (see clean) and keeps the
+## action log; the quick in-memory copy preview() makes skips both, which matters on phones
+## (it runs on every tap).
+func to_dict(for_save := true) -> Dictionary:
 	var rng_states := {}
 	for stream in _rngs:
 		rng_states[stream] = (_rngs[stream] as ZRng).state
-	return clean({
+	var data := {
 		"v": SAVE_VERSION,
 		"seed": seed_text, "deck": deck_id, "stake": stake,
 		"phase": phase, "town": town, "show": show_index, "won": won,
@@ -1415,8 +1794,12 @@ func to_dict() -> Dictionary:
 		"payout": payout.duplicate(true),
 		"counters": counters.duplicate(true), "show_counters": show_counters.duplicate(true),
 		"rng": rng_states, "next_id": _next_card_id,
-		"log": action_log.duplicate(true),
-	})
+		"log": action_log.duplicate(true) if for_save else [],
+		"tour": tour, "route": route.duplicate(true), "route_row": route_row, "route_col": route_col, "path": path.duplicate(), "city": city,
+		"town_option": town_option, "scenario": scenario, "scenario_on": scenario_on,
+		"scenario_beat": scenario_beat, "mood": mood, "ovation": ovation,
+	}
+	return clean(data) if for_save else data
 
 
 static func from_dict(d: Dictionary) -> RunState:
@@ -1484,6 +1867,27 @@ static func from_dict(d: Dictionary) -> RunState:
 	run._next_card_id = int(d["next_id"])
 	for a in d["log"]:
 		run.action_log.append(_normalize(a))
+	# Saves from before the tour (version 1) have none of these and play the classic rules.
+	run.tour = bool(d.get("tour", false))
+	for row in d.get("route", []):
+		var nodes: Array = []
+		for node in row:
+			var to: Array[int] = []
+			for c in node["to"]:
+				to.append(int(c))
+			nodes.append({"city": str(node["city"]), "to": to})
+		run.route.append(nodes)
+	run.route_row = int(d.get("route_row", 0))
+	run.route_col = int(d.get("route_col", 0))
+	for col in d.get("path", []):
+		run.path.append(int(col))
+	run.city = str(d.get("city", ""))
+	run.town_option = int(d.get("town_option", 0))
+	run.scenario = str(d.get("scenario", ""))
+	run.scenario_on = bool(d.get("scenario_on", false))
+	run.scenario_beat = int(d.get("scenario_beat", 0))
+	run.mood = int(d.get("mood", MOOD_START))
+	run.ovation = bool(d.get("ovation", false))
 	return run
 
 

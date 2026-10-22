@@ -7,13 +7,54 @@ extends Node
 
 ## The most screen pixels per card unit, by graphics quality (Low, Medium, High).
 const MAX_SCALE := [1.5, 2.5, 4.0]
-## How many faces to keep before letting go of ones no card is using.
+## How much graphics memory the kept faces may use, by graphics quality, before the oldest
+## ones no card is using are let go (faces on screen are always kept). Browsing the whole
+## collection used to keep ~30 MB of faces at Medium and twice that at High: too much for
+## phones, where the screen's own buffers already take ~50 MB.
+const BUDGET_MB := [8, 16, 32]
+## And at most this many faces whatever their size.
 const KEEP := 220
+
+## Faces drawn since the game started (tools/perf.mjs reports it).
+var baked := 0
+## While true (a hand is scoring) no faces are drawn ahead, so the scoring stays smooth.
+var hold := false
 
 var _done := {}
 var _waiting := {}
 var _users := {}
 var _order: Array[String] = []
+## Faces to draw ahead of need, one every other frame: cards still in the draw pile, so a
+## card dealt mid-show is already drawn (drawing several at once caused a long frame).
+var _ahead: Array = []
+var _ahead_keys := {}
+var _frame := 0
+
+
+## Queues the faces of these playing cards at this size, for drawing ahead.
+func prebake(cards: Array, view_size: Vector2) -> void:
+	for card: PlayingCard in cards:
+		var key := CardView.playing_key(card, card.edition, view_size)
+		if not (_done.has(key) or _waiting.has(key) or _ahead_keys.has(key)):
+			_ahead_keys[key] = true
+			_ahead.append([key, card, view_size])
+
+
+func _process(_delta: float) -> void:
+	_frame += 1
+	if hold or _ahead.is_empty() or _frame % 2 == 0:
+		return
+	var next: Array = _ahead.pop_front()
+	var key: String = next[0]
+	_ahead_keys.erase(key)
+	if _done.has(key) or _waiting.has(key):
+		return
+	var view := CardView.new(next[2])
+	view.card = next[1]
+	view.edition = (next[1] as PlayingCard).edition
+	_waiting[key] = []
+	_bake(view, key)
+	view.free()
 
 
 ## The face's texture if it's drawn; otherwise starts drawing it, and the card gets it by
@@ -23,7 +64,9 @@ func request(view: CardView) -> Texture2D:
 	if _done.has(key):
 		_order.erase(key)
 		_order.append(key)
-		_users[key].append(weakref(view))
+		var users: Array = _users[key].filter(func(ref: WeakRef) -> bool: return ref.get_ref() != null)
+		users.append(weakref(view))
+		_users[key] = users
 		return _done[key]
 	if not _waiting.has(key):
 		_waiting[key] = []
@@ -42,6 +85,8 @@ func clear() -> void:
 	_done.clear()
 	_users.clear()
 	_order.clear()
+	_ahead.clear()
+	_ahead_keys.clear()
 
 
 func _scale() -> float:
@@ -50,6 +95,7 @@ func _scale() -> float:
 
 
 func _bake(view: CardView, key: String) -> void:
+	baked += 1
 	var scale := _scale()
 	var viewport := SubViewport.new()
 	viewport.transparent_bg = true
@@ -62,6 +108,9 @@ func _bake(view: CardView, key: String) -> void:
 	viewport.add_child(face)
 	add_child(viewport)
 	await RenderingServer.frame_post_draw
+	# The face is drawn (the viewport keeps the picture; UPDATE_ONCE won't draw again). Drop
+	# the copy, so a painting it used isn't held in graphics memory.
+	face.queue_free()
 	var texture := viewport.get_texture()
 	texture.set_meta("viewport", viewport)
 	_done[key] = texture
@@ -76,10 +125,22 @@ func _bake(view: CardView, key: String) -> void:
 	_trim()
 
 
-## Lets go of the oldest faces no card on screen is using.
+## Graphics memory the kept faces use, in bytes.
+func kept_bytes() -> int:
+	var total := 0
+	for key in _done:
+		var size := ((_done[key] as ViewportTexture).get_meta("viewport") as SubViewport).size
+		total += size.x * size.y * 4
+	return total
+
+
+## Lets go of the oldest faces no card on screen is using, while the kept ones are over the
+## memory budget or the count.
 func _trim() -> void:
+	var budget: int = BUDGET_MB[Settings.quality] * 1048576
+	var bytes := kept_bytes()
 	var i := 0
-	while _order.size() > KEEP and i < _order.size():
+	while (_order.size() > KEEP or bytes > budget) and i < _order.size():
 		var key := _order[i]
 		var in_use := false
 		for ref in _users[key]:
@@ -90,6 +151,7 @@ func _trim() -> void:
 			i += 1
 			continue
 		var viewport := (_done[key] as ViewportTexture).get_meta("viewport") as SubViewport
+		bytes -= viewport.size.x * viewport.size.y * 4
 		viewport.queue_free()
 		_done.erase(key)
 		_users.erase(key)

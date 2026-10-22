@@ -219,3 +219,35 @@ zanni/
    - Store payout and tax details. These are yours to enter.
 4. **Domain** for the server API, privacy policy and support page.
 5. **Cloudflare plan:** password hashing may need the Workers Paid plan ($5/mo) for CPU time.
+
+## 10. What makes it its own game (chosen 2026-10-22)
+
+Luca asked what to add to make the game more unique and picked all 16 ideas. He then chose
+how each should work. They're built in four groups, gameplay first, with a stop after each
+group for him to play. Each group's content goes to him as a card batch before it's coded
+(group 1 is cards/batch-12.md).
+
+| Group | Feature | His choice |
+|---|---|---|
+| 1 Gameplay | **Scenarios** (commedia scripts) | Risky: three beats; hitting them pays a lot, missing one gives a penalty |
+| 1 Gameplay | **Map of Italy** | Branching route, real cities, each with a twist and shop flavour |
+| 1 Gameplay | **Lazzi** (Jester duos) | Owning both lets you merge them into one stronger card in one slot |
+| 1 Gameplay | **Live audience** | Painted theatre boxes reacting to every hand |
+| 1 Gameplay | **Crowd mood** | Bonus when full and a penalty when empty |
+| 1 Gameplay | **Encore** | Offered when the crowd demands it (high mood) |
+| 2 Progression | **Jester fame** | Permanent across runs: a Jester that reaches 3 stars becomes its Maestro version for good |
+| 2 Progression | **Troupe wagon** | Spend between runs on cosmetics, small starting perks, earlier unlocks, and the wagon on the map |
+| 2 Progression | **Story campaign** | Long tour: 15+ chapters, one per city |
+| 2 Progression | **Patron rivalry** | Both: a beaten Patron can return later in the run, and the one that beat you returns next run as a nemesis; Patrons get lines |
+| 3 Show feel | **Critic's review** | La Gazzetta reviews every show at cash-out |
+| 3 Show feel | **Jester voices** | Synthesized Italian babble per Jester, with a speech bubble |
+| 3 Show feel | **Hecklers** | Appear when the crowd is angry; a tomato splats a card in hand |
+| 4 Social | **Playbill share** | A painted playbill of the run to save or share |
+| 4 Social | **Weekly tour** | A weekly seeded tour with a random special rule and its own leaderboard |
+| 4 Social | **Friend duel** | Both: challenge links (play my seed) and live duels by room code |
+| 4 Social | **Ghost troupes** | In the daily run, see other players' troupes from the same town |
+
+**Change to §3:** Maestro fame and wagon perks are permanent power, which §3 "Rewards and
+progression" ruled out. Luca decided (2026-10-22): they're on in normal runs and the
+campaign, and off in daily, weekly, duel and ranked runs, so leaderboards stay equal. The
+online parts stay local until he says deploy.

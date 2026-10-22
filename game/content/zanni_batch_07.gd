@@ -67,7 +67,7 @@ static func _commons() -> void:
 	_add("z_almanacchi", 4, {"independent": almanacchi})
 
 	var sbandieratore := func(ctx: ScoreContext, item: ItemCard) -> void:
-		var right := ctx.run.zanni.size() - 1 - ctx.run.zanni.find(item)
+		var right := ctx.run.zanni.size() - 1 - ctx.run.position_of(item)
 		if right > 0:
 			ctx.add_points(20 * right, ctx.run.item_source(item))
 	_add("z_sbandieratore", 3, {"independent": sbandieratore})

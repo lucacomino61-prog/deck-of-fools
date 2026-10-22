@@ -103,7 +103,7 @@ func _cell(text: String, colour: Color) -> Label:
 func _suit_icon(suit: int) -> Control:
 	var icon := Control.new()
 	icon.custom_minimum_size = Vector2(16, 14)
-	var colour := UiTheme.RED_SUIT.lightened(0.25) if suit == PlayingCard.Suit.HEARTS or suit == PlayingCard.Suit.DIAMONDS else UiTheme.TEXT
+	var colour := CardView.suit_colour(suit).lightened(0.3) if Settings.high_contrast and suit != PlayingCard.Suit.SPADES else (UiTheme.RED_SUIT.lightened(0.25) if suit == PlayingCard.Suit.HEARTS or suit == PlayingCard.Suit.DIAMONDS else UiTheme.TEXT)
 	icon.draw.connect(func() -> void: CardView.draw_suit(icon, Vector2(8, 7), 5.0, suit, colour))
 	return icon
 
@@ -119,7 +119,10 @@ func _build_run(run: RunState) -> void:
 		lines.append(["This town's Patron", "%s: %s" % [UiTheme.name_of(run.town_patron), UiTheme.text_of(run.town_patron)]])
 	if not run.warrants.is_empty():
 		lines.append(["Warrants", ", ".join(run.warrants.map(func(w: String) -> String: return UiTheme.name_of(w)))])
-	lines.append(["Seed", run.seed_text + ("  (daily run)" if Game.run_meta.has("daily_date") else "")])
+	lines.append(["Seed", run.seed_text + ("  (daily run)" if Game.run_meta.has("daily_date") else ("  (seeded run)" if Game.run_meta.get("seeded", false) else ""))])
 	for line in lines:
 		body.add_child(UiTheme.label(line[0], 9, UiTheme.MUTED))
 		body.add_child(words(line[1], 10, UiTheme.TEXT))
+	var copy := RunScreen._copy_seed_button(run.seed_text)
+	copy.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	body.add_child(copy)

@@ -11,7 +11,7 @@ static func register() -> void:
 	_add("z_zanni", 2, EffectKit.flat(0, 4))
 
 	var arlecchino := func(ctx: ScoreContext, item: ItemCard) -> void:
-		var left := ctx.run.zanni.find(item)
+		var left := ctx.run.position_of(item)
 		if left > 0:
 			ctx.add_mult(2 * left, ctx.run.item_source(item))
 	_add("z_arlecchino", 4, {"independent": arlecchino})

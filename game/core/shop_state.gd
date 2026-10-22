@@ -1,8 +1,8 @@
 class_name ShopState
 extends RefCounted
 ## The shop between shows. Card offers are {kind, id, cost, edition, sold}, plus "card"
-## (a {rank, suit, enh, ed, seal} description) for playing cards and "free" when a Favor
-## pays for it. Packs are {id, cost, sold} (and "free"). The town's own Warrant lives on
+## (a {rank, suit, enh, ed, seal} description) for playing cards, "free" when a Favor
+## pays for it, and a Jester's "sticker" (eternal, perishable) and "rented" at high stakes. Packs are {id, cost, sold} (and "free"). The town's own Warrant lives on
 ## RunState; `extra_warrant` is a second one a Favor can add to this shop only.
 
 var offers: Array[Dictionary] = []
@@ -32,6 +32,10 @@ static func from_dict(d: Dictionary) -> ShopState:
 			offer["card"] = (o["card"] as Dictionary).duplicate()
 		if o.has("free"):
 			offer["free"] = bool(o["free"])
+		if o.has("sticker"):
+			offer["sticker"] = str(o["sticker"])
+		if o.has("rented"):
+			offer["rented"] = bool(o["rented"])
 		shop.offers.append(offer)
 	for p in d.get("packs", []):
 		var pack := {"id": str(p["id"]), "cost": int(p["cost"]), "sold": bool(p["sold"])}

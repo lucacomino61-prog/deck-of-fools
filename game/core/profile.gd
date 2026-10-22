@@ -17,10 +17,13 @@ var challenges_won: Dictionary = {}
 var badges: Dictionary = {}
 
 
-## Call once when a run ends (won and abandoned, or lost).
-func record_run(run: RunState) -> void:
+## Call once when a run ends (won and abandoned, or lost). A run that doesn't `count` (a
+## seeded one) only adds its discoveries: no feats, wins or losses.
+func record_run(run: RunState, counts := true) -> void:
 	for id in run.seen:
 		discovered[id] = true
+	if not counts:
+		return
 	for f in run.feats:
 		feats[f] = true
 	signs_used += int(run.counters.get("used_sign", 0))

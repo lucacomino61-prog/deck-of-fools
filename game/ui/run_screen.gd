@@ -30,10 +30,12 @@ const ACTION_CUES := {
 	"buy_warrant": "buy", "buy_pack": "pack", "pick": "deal", "skip_pack": "click",
 	"sell": "sell", "use": "pack", "reroll": "reroll", "leave_shop": "click",
 	"swap_patron": "reroll", "reorder_zanni": "deal",
+	"merge": "jackpot", "travel": "deal", "encore": "applause", "bow": "click",
 }
 ## What each kind of card is, under its own text when it's tapped.
 const KIND_HELP := {
 	"zanni": "Jester: stays with you and works on every hand. Slots are limited (top left); sell one to make room.",
+	"lazzo": "Lazzo: two Jesters merged into one routine. It takes one slot and does both their effects, about 1.5x stronger.",
 	"tarocchi": "Tarocchi: a one-use card. If it changes cards, select them in your hand first, then tap Use.",
 	"sign": "Sign: a one-use card that levels up a poker hand, so it scores more from now on.",
 	"omen": "Omen: a powerful one-use card.",
@@ -74,6 +76,12 @@ var scoring := false
 var skipping := false
 ## What Enter does right now (the main button), or nothing.
 var primary := Callable()
+## A resize or settings change came while busy: rebuild when it's over.
+var _stale := false
+var _preview_key := ""
+var _preview_value := {}
+## The last Jester's "right now" text, by index, action count and phase.
+var _now_cache := {}
 
 var stage: Control
 var lbl_place: Label
@@ -97,7 +105,15 @@ var overlay: Control
 var tip: Control
 ## The first-run guide's tip card.
 var coach: Control
+## Lights up where a dragged card can be dropped; the words above the card say what
+## dropping it does.
+var drop_hint: Panel
+var drop_words: PanelContainer
 var jester_views: Array = []
+## The two theatre boxes beside the table on tour (batch 12); they stay across refreshes so
+## their reactions can play out.
+var boxes: Array[TheatreBox] = []
+const BOX_SIZE := Vector2(60, 100)
 
 
 func _ready() -> void:
@@ -113,6 +129,7 @@ func _ready() -> void:
 
 func _exit_tree() -> void:
 	Engine.time_scale = 1.0
+	CardArt.hold = false
 
 
 ## Works out the layout from the room on screen and the Text & card size setting: the
@@ -146,6 +163,14 @@ func _build_screen() -> void:
 	add_child(stage)
 	_build_side()
 	top_row = _area(Vector2(AREA_X, 4), Vector2(area_w, 80))
+	boxes.clear()
+	for side in 2:
+		var box := TheatreBox.new(side)
+		box.position = Vector2(AREA_X + (0.0 if side == 0 else area_w - BOX_SIZE.x), 86)
+		box.size = BOX_SIZE
+		box.visible = false
+		stage.add_child(box)
+		boxes.append(box)
 	middle = _area(Vector2(AREA_X, 86), Vector2(area_w, 104))
 	hand_row = _area(Vector2(AREA_X, 190), Vector2(area_w, 134))
 	buttons = HBoxContainer.new()
@@ -159,16 +184,32 @@ func _build_screen() -> void:
 	coach = Control.new()
 	coach.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	stage.add_child(coach)
+	drop_hint = Panel.new()
+	drop_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	drop_hint.visible = false
+	stage.add_child(drop_hint)
+	drop_words = PanelContainer.new()
+	drop_words.add_theme_stylebox_override("panel", UiTheme.box(Color(0.06, 0.03, 0.09, 0.94), UiTheme.GOLD.darkened(0.2), 4))
+	drop_words.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	drop_words.visible = false
+	drop_words.z_index = 3
+	drop_words.add_child(UiTheme.title("", 11, UiTheme.GOLD))
+	stage.add_child(drop_words)
 	overlay = Control.new()
 	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(overlay)
 
 
-## After a resize or a settings change: build the screen again at the new size.
+## After a resize or a settings change: build the screen again at the new size (once the
+## scoring is over, if it comes mid-hand).
 func _rebuild_screen() -> void:
-	if busy or not is_inside_tree():
+	if not is_inside_tree():
 		return
+	if busy:
+		_stale = true
+		return
+	_stale = false
 	for child in get_children():
 		remove_child(child)
 		child.queue_free()
@@ -306,9 +347,13 @@ func _counter(parent: Control, caption: String, colour: Color) -> Label:
 func refresh() -> void:
 	if busy or run == null:
 		return
+	if _stale:
+		_rebuild_screen()
+		return
 	_drop_stale_selection()
 	Feel.mood(_mood(), run.town)
 	Feel.intensity(_heat())
+	_update_boxes()
 	_update_side()
 	_build_top()
 	_build_middle()
@@ -317,6 +362,10 @@ func refresh() -> void:
 	_build_tip()
 	_build_coach()
 	_build_overlay()
+	# The next cards to be dealt (they come off the end of the draw pile), drawn ahead so a
+	# refill doesn't stall on drawing their faces.
+	if run.phase == RunState.Phase.IN_SHOW:
+		CardArt.prebake(run.draw_pile.slice(maxi(0, run.draw_pile.size() - 8)), hand_card)
 
 
 # --- the first-run guide ---
@@ -324,12 +373,12 @@ func refresh() -> void:
 ## Each tip: the phase it shows in, its words, and whether it waits for "Got it" (the
 ## others move on when the player does what they say).
 const COACH := [
-	[RunState.Phase.CHOOSE_SHOW, "Welcome to the tour! Every town has three shows. Score a show's target to win it. Tap Play Matinee to begin.", false],
+	[RunState.Phase.CHOOSE_SHOW, "Welcome to the tour! Every town has three shows. Score a show's target to win it. Tap Improvise to begin, or Perform the Scenario below for bigger rewards.", false],
 	[RunState.Phase.IN_SHOW, "These are your cards. Tap up to 5 to make a poker hand: a pair, two pair, a flush, a straight... Hold any card to read it.", false],
 	[RunState.Phase.IN_SHOW, "The left panel shows the hand's Points x Mult, and the middle what it will score. Press Play hand (or flick a card up).", false],
 	[RunState.Phase.IN_SHOW, "Score = Points x Mult. Reach the target before your Hands run out. Discard swaps cards for new ones (or flick one down).", true],
 	[RunState.Phase.CASH_OUT, "Show won! Unused hands pay extra ducats. Cash out to visit the Market.", false],
-	[RunState.Phase.SHOP, "In the Market, Jesters stay with you and boost every hand. Buy one if you can, then press Next show.", true],
+	[RunState.Phase.SHOP, "In the Market, Jesters stay with you and boost every hand. Tap one and Buy, or drag it up to your Jesters. Then press Next show.", true],
 ]
 
 
@@ -362,12 +411,18 @@ func _build_coach() -> void:
 		return
 	var panel := PanelContainer.new()
 	panel.add_theme_stylebox_override("panel", UiTheme.panel_box(Color(UiTheme.PANEL_DARK, 0.96), UiTheme.GOLD))
-	panel.position = Vector2(AREA_X + 2.0, 4.0)
-	panel.size = Vector2(minf(area_w - 112.0, 420.0), 0)
+	# Beside the Jesters, not over them (taps go through the box itself, to its buttons only).
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var jesters_end := 0.0 if run.zanni.is_empty() else (jester_views[jester_views.size() - 1] as Control).position.x + jester_card.x + 8.0
+	var room := area_w - 112.0 - jesters_end
+	panel.position = Vector2(AREA_X + 2.0 + (jesters_end if room >= 230.0 else 0.0), 4.0)
+	panel.size = Vector2(minf(room if room >= 230.0 else area_w - 112.0, 420.0), 0)
 	var col := VBoxContainer.new()
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	col.add_theme_constant_override("separation", 3)
 	panel.add_child(col)
 	var top := HBoxContainer.new()
+	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var step_label := UiTheme.label("First run  -  tip %d of %d" % [s + 1, COACH.size()], 8, UiTheme.GOLD)
 	step_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(step_label)
@@ -437,14 +492,21 @@ func _drop_stale_selection() -> void:
 			still_there = shop != null and (run.town_warrant != "" and not run.warrant_bought if i == 0 else shop.extra_warrant != "" and not shop.extra_bought)
 		"pack_item":
 			still_there = run.phase == RunState.Phase.PACK and i < (run.pack.get("items", []) as Array).size()
+		"city":
+			still_there = run.phase == RunState.Phase.MAP and run.roads().has(i)
 	if not still_there:
 		selection = {}
 
 
 func _update_side() -> void:
 	var r := run
-	var daily := "" if not Game.run_meta.has("daily_date") else ("Daily practice: " if Game.run_meta.get("practice", false) else "Daily: ")
-	lbl_place.text = daily + "Town %d - %s" % [r.town, SHOW_NAMES[r.show_index]]
+	var kind := ""
+	if Game.run_meta.has("daily_date"):
+		kind = "Daily practice: " if Game.run_meta.get("practice", false) else "Daily: "
+	elif Game.run_meta.get("seeded", false):
+		kind = "Seeded: "
+	var place := "Town %d" % r.town if r.city == "" else "%d. %s" % [r.town, UiTheme.name_of(r.city)]
+	lbl_place.text = kind + ("%s - on the road" % place if r.phase == RunState.Phase.MAP else "%s - %s" % [place, SHOW_NAMES[r.show_index]])
 	if r.phase == RunState.Phase.IN_SHOW:
 		lbl_target_caption.text = "Score at least"
 		lbl_target.text = UiTheme.number(r.show_target)
@@ -492,9 +554,19 @@ func _update_info() -> void:
 func _phase_hint() -> String:
 	match run.phase:
 		RunState.Phase.CHOOSE_SHOW:
+			if run.tour:
+				return "Perform tonight's Scenario for big rewards, improvise, or skip the show for its Favor."
 			return "Play this show, or skip it to take its Favor."
 		RunState.Phase.IN_SHOW:
+			if run.scenario_on:
+				return "Scenario: your next hand must be %s." % ScenarioCards.beat_text((ContentDB.get_def(run.scenario).data["beats"] as Array)[run.scenario_beat])
 			return "Select up to 5 cards, then Play or Discard."
+		RunState.Phase.MAP:
+			return "Choose the next city on the map. Each one changes the shows and the shop."
+		RunState.Phase.ENCORE:
+			if run.show_counters.get("encore", "") == "live":
+				return "One hand worth %s or more doubles your cash-out." % UiTheme.number(run.encore_target())
+			return "The crowd wants more! Perform an Encore or take a bow."
 		RunState.Phase.CASH_OUT:
 			return "The show is won. Collect your ducats."
 		RunState.Phase.SHOP:
@@ -511,21 +583,40 @@ func _build_top() -> void:
 	jester_views.clear()
 	var r := run
 	var step := minf(57.0, (area_w - 110.0 - jester_card.x) / maxf(1.0, r.zanni.size() - 1))
+	var shares := _jester_shares()
 	for i in r.zanni.size():
 		var z := r.zanni[i]
-		var v := _named_view("zanni", z.def_id, jester_card, {"zone": "zanni", "index": i})
+		var v := _named_view(z.def().kind if z.def() != null else "zanni", z.def_id, jester_card, {"zone": "zanni", "index": i})
 		v.edition = z.edition
 		v.dimmed = z.debuffed
 		v.face_down = z.face_down
 		v.sticker = "eternal" if z.state.get("eternal", false) else ("perishable" if z.state.has("perish") else ("rented" if z.state.get("rented", false) else ""))
 		v.position = Vector2(i * step, 0)
 		v.sway = i + 3
-		v.draggable = not busy and r.zanni.size() > 1
+		# Dragged along the row it reorders; dragged down off the row (onto the table) it sells.
+		v.free_drag = not busy
+		var sellable: bool = not z.state.get("eternal", false)
+		var sell_words := "Drop to sell for %d ducats" % (z.sell_value() * r.stat("sell_pct") / 100)
+		var index := i
 		v.drag_moved.connect(func(view: CardView, at: Vector2) -> void:
-			view.position.x = clampf(at.x - top_row.global_position.x - jester_card.x / 2.0, 0.0, area_w - 110.0 - jester_card.x))
-		v.drag_ended.connect(_on_jester_drop)
+			_follow(view, at)
+			if sellable and not _zone("top").has_point(at):
+				_show_hint("sell", sell_words, _zone("sell").has_point(at), view)
+			else:
+				_hide_hint())
+		v.drag_ended.connect(func(view: CardView, at: Vector2) -> void:
+			_hide_hint()
+			if sellable and _zone("sell").has_point(at):
+				_act({"a": "sell", "zone": "zanni", "index": index})
+			else:
+				_on_jester_drop(view, at))
 		top_row.add_child(v)
 		jester_views.append(v)
+		var badge := _share_badge(shares[i]) if shares.has(i) else null
+		if badge != null:
+			top_row.add_child(badge)
+			badge.reset_size()
+			badge.position = Vector2(v.position.x + (jester_card.x - badge.size.x) / 2.0, -3.0)
 	var count := UiTheme.label("Jesters %d/%d" % [r.zanni.size(), r.stat("zanni_slots")], 8, UiTheme.MUTED)
 	count.position = Vector2(0, 72)
 	top_row.add_child(count)
@@ -535,6 +626,9 @@ func _build_top() -> void:
 		v.edition = c.edition
 		v.position = Vector2(area_w - 100 + i * 50, 4)
 		v.sway = i + 9
+		var use_index := i
+		_droppable(v, "table", "Drop to use it" + (" on the picked cards" if not selected_hand.is_empty() else ""),
+			func() -> void: _act({"a": "use", "index": use_index, "cards": _selected_ids()}))
 		top_row.add_child(v)
 	var ccount := UiTheme.label("One-use cards %d/%d" % [r.consumables.size(), r.stat("consumable_slots")], 8, UiTheme.MUTED)
 	ccount.position = Vector2(area_w - 100, 72)
@@ -576,6 +670,12 @@ func _build_tip() -> void:
 	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	text.custom_minimum_size = Vector2(176, 0)
 	col.add_child(text)
+	if zone == "zanni":
+		for line in _jester_lines(i):
+			var l := UiTheme.label(line, 9, UiTheme.GOLD if not line.begins_with("Sells") else UiTheme.MUTED)
+			l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			l.custom_minimum_size = Vector2(176, 0)
+			col.add_child(l)
 	tip.add_child(panel)
 	var x: float = AREA_X + ((jester_views[i] as Control).position.x if zone == "zanni" else area_w - 100 + i * 50)
 	panel.position = Vector2(clampf(x - 20.0, AREA_X, AREA_X + area_w - 290.0), 84.0)
@@ -593,6 +693,67 @@ func _named_view(kind: String, def_id: String, view_size: Vector2, tag: Dictiona
 	v.tapped.connect(_on_tap)
 	v.long_pressed.connect(_show_detail)
 	return v
+
+
+# --- drag to act (as Balatro does on phones) ---
+
+## Where a dragged card can be dropped: "top" the Jesters' row (to buy or take a card),
+## "table" the middle and the hand (to use a one-use card), "sell" the middle (a Jester
+## dragged off its row).
+func _zone(zone_name: String) -> Rect2:
+	match zone_name:
+		"top":
+			return top_row.get_global_rect()
+		"table":
+			return middle.get_global_rect().merge(hand_row.get_global_rect())
+	return middle.get_global_rect()
+
+
+## Makes a card act when it's dragged onto its zone: it follows the finger, the zone lights
+## up with what dropping does, and dropped anywhere else the card goes back.
+func _droppable(v: CardView, zone_name: String, words: String, act: Callable) -> void:
+	if busy:
+		return
+	v.free_drag = true
+	v.drag_moved.connect(func(view: CardView, at: Vector2) -> void:
+		_follow(view, at)
+		_show_hint(zone_name, words, _zone(zone_name).has_point(at), view))
+	v.drag_ended.connect(func(_view: CardView, at: Vector2) -> void:
+		_hide_hint()
+		if _zone(zone_name).has_point(at):
+			act.call()
+		else:
+			Feel.play("deselect")
+			refresh())
+
+
+## A dragged card sits centred under the finger.
+func _follow(view: Control, at: Vector2) -> void:
+	view.global_position = at - view.size / 2.0
+
+
+func _show_hint(zone_name: String, words: String, active: bool, card: Control) -> void:
+	var rect := _zone(zone_name)
+	drop_hint.visible = true
+	drop_hint.global_position = rect.position
+	drop_hint.size = rect.size
+	var style := UiTheme.box(Color(UiTheme.GOLD, 0.2 if active else 0.07), UiTheme.GOLD if active else UiTheme.GOLD.darkened(0.45), 6)
+	style.set_border_width_all(2)
+	drop_hint.add_theme_stylebox_override("panel", style)
+	drop_words.visible = true
+	(drop_words.get_child(0) as Label).text = words
+	drop_words.modulate.a = 1.0 if active else 0.75
+	drop_words.reset_size()
+	var at := card.global_position + Vector2((card.size.x - drop_words.size.x) / 2.0, -drop_words.size.y - 2.0)
+	if at.y < stage.global_position.y:
+		at.y = card.global_position.y + card.size.y + 2.0
+	at.x = clampf(at.x, stage.global_position.x, stage.global_position.x + stage_w - drop_words.size.x)
+	drop_words.global_position = at
+
+
+func _hide_hint() -> void:
+	drop_hint.visible = false
+	drop_words.visible = false
 
 
 ## Dropping a dragged Jester: the Jesters take the order they now stand in (it matters:
@@ -639,6 +800,8 @@ func _show_detail(view: CardView) -> void:
 		if what.contains(":"):
 			var how := what.get_slice(":", 1).strip_edges()
 			lines.append(how.left(1).to_upper() + how.substr(1))
+		if str(view.tag.get("zone", "")) == "zanni":
+			lines.append_array(_jester_lines(int(view.tag["index"])))
 	UiTheme.show_sheet(DetailSheet.new(big, heading, lines))
 
 
@@ -657,6 +820,151 @@ func _build_middle() -> void:
 			_middle_shop()
 		RunState.Phase.PACK:
 			_middle_pack()
+		RunState.Phase.MAP:
+			_middle_map()
+		RunState.Phase.ENCORE:
+			if run.show_counters.get("encore", "") == "live":
+				_middle_show_info()
+			else:
+				_middle_encore()
+
+
+# --- the tour (batch 12): the crowd, Scenarios, the Encore, the map ---
+
+## The theatre boxes show during a show and its Encore on tour, with the crowd's mood.
+func _update_boxes() -> void:
+	var show_time := run.phase == RunState.Phase.IN_SHOW or run.phase == RunState.Phase.ENCORE
+	for box in boxes:
+		box.visible = run.tour and show_time
+		box.mood = run.mood
+		box.chant("Bis!" if run.phase == RunState.Phase.ENCORE and run.show_counters.get("encore", "") == "offered" else "")
+
+
+## The crowd's mood as ten pips, gold when they're happy, red when they're not.
+func _mood_meter(width: float) -> Control:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 2)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.custom_minimum_size = Vector2(width, 10)
+	row.add_child(UiTheme.label("Crowd", 8, UiTheme.MUTED))
+	var colour := UiTheme.GOLD if run.mood >= RunState.ENCORE_MOOD else (UiTheme.MULT if run.mood <= 3 else UiTheme.TEXT)
+	for i in RunState.MOOD_MAX:
+		var pip := ColorRect.new()
+		pip.custom_minimum_size = Vector2(7, 6)
+		pip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		pip.color = colour if i < run.mood else Color(1, 1, 1, 0.12)
+		row.add_child(pip)
+	if run.ovation:
+		row.add_child(UiTheme.label("Ovation: next hand x1.5", 8, UiTheme.GOLD))
+	return row
+
+
+## The three beats of the Scenario being performed: done in gold, the next one lit, a
+## Fiasco in red.
+func _scenario_strip(width: float) -> Control:
+	var def := ContentDB.get_def(run.scenario)
+	var state := str(run.show_counters.get("scenario", ""))
+	if def == null or (not run.scenario_on and state == ""):
+		return null
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	row.custom_minimum_size = Vector2(width, 0)
+	var beats: Array = def.data["beats"]
+	for i in beats.size():
+		var done := i < run.scenario_beat
+		var next := run.scenario_on and i == run.scenario_beat
+		var failed := state == "fiasco" and i == run.scenario_beat
+		var border := UiTheme.GOLD if done or next else (UiTheme.MULT if failed else UiTheme.PANEL_LIGHT)
+		var chip := PanelContainer.new()
+		chip.add_theme_stylebox_override("panel", UiTheme.box(Color(border, 0.25 if done else 0.08), border, 3))
+		chip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var reward: String = ["+3 ducats", "x2 Mult", "x3, +5 ducats"][i]
+		var text := "%s %d. %s  (%s)" % ["OK" if done else ("X" if failed else ""), i + 1, ScenarioCards.beat_text(beats[i]), reward]
+		var l := UiTheme.label(text.strip_edges(), 8, UiTheme.GOLD if done or next else (UiTheme.MULT if failed else UiTheme.MUTED))
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		chip.add_child(l)
+		row.add_child(chip)
+	return row
+
+
+## The crowd calls for more: what an Encore wins or costs.
+func _middle_encore() -> void:
+	var col := VBoxContainer.new()
+	col.position = Vector2(BOX_SIZE.x + 6.0, 4)
+	col.size = Vector2(area_w - 2.0 * (BOX_SIZE.x + 6.0), 100)
+	col.add_theme_constant_override("separation", 4)
+	middle.add_child(col)
+	col.add_child(_centred(UiTheme.title("Bis! An Encore!", 20, UiTheme.GOLD)))
+	var total := 0
+	var reward := 0
+	for p in run.payout:
+		total += int(p["v"])
+		if p["src"] == "show":
+			reward = int(p["v"])
+	var lines := [
+		"One more hand, worth %s or more on its own:" % UiTheme.number(run.encore_target()),
+		"hit it and your cash-out doubles (+%d ducats)." % maxi(total, 0),
+		"Miss it and you lose the show's reward (-%d)." % reward,
+	]
+	for line in lines:
+		var l := _wrapped(line, 10, col.size.x)
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		col.add_child(l)
+
+
+## The Map of Italy fills the table while the troupe chooses its next city; beside it, the
+## city tapped (or the first one a road leads to) with its twist and its shop.
+func _middle_map() -> void:
+	var map_w := minf(250.0, area_w * 0.52)
+	var map := MapView.new(run)
+	map.position = Vector2(0, 0)
+	map.size = Vector2(map_w, 236)
+	var roads := run.roads()
+	var col := -1
+	if selection.get("zone", "") == "city":
+		col = int(selection["index"])
+	elif not roads.is_empty():
+		col = int(roads[0])
+	map.selected = col
+	map.city_tapped.connect(func(c: int) -> void:
+		Feel.play("select")
+		selection = {"zone": "city", "index": c}
+		refresh())
+	middle.add_child(map)
+	if col < 0:
+		return
+	var city_id: String = (run.route[run.route_row + 1] as Array)[col]["city"]
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", UiTheme.panel_box(Color(UiTheme.PANEL_DARK, 0.95), UiTheme.GOLD.darkened(0.3)))
+	panel.position = Vector2(map_w + 8.0, 0)
+	panel.size = Vector2(area_w - map_w - 8.0, 236)
+	middle.add_child(panel)
+	var info := VBoxContainer.new()
+	info.add_theme_constant_override("separation", 4)
+	panel.add_child(info)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 8)
+	info.add_child(head)
+	var card := CardView.new(Vector2(60, 84))
+	card.kind = "city"
+	card.def_id = city_id
+	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	head.add_child(card)
+	var names := VBoxContainer.new()
+	head.add_child(names)
+	var town_no := run.town
+	names.add_child(UiTheme.label("Town %d of the tour" % town_no if town_no <= Shows.FINAL_TOWN else "Town %d (endless)" % town_no, 8, UiTheme.MUTED))
+	names.add_child(UiTheme.title(UiTheme.name_of(city_id), 16, UiTheme.GOLD))
+	names.add_child(UiTheme.label(TranslationServer.translate(city_id + ".gloss"), 9, UiTheme.MUTED))
+	var w := panel.size.x - 20.0
+	info.add_child(_wrapped("Twist: " + UiTheme.text_of(city_id), 10, w))
+	info.add_child(_wrapped("Shop: " + TranslationServer.translate(city_id + ".lean"), 9, w))
+	var options: Array = ContentDB.get_def(city_id).data.get("options", [])
+	if not options.is_empty():
+		info.add_child(_wrapped("You'll choose on arrival: " + " or ".join(options) + ".", 9, w))
+	if roads.size() > 1:
+		info.add_child(_wrapped("Tap another glowing city to compare.", 8, w))
 
 
 func _middle_shows() -> void:
@@ -696,28 +1004,164 @@ func _favor_text(slot: int) -> String:
 
 ## During a show the middle says what to do next, or names the hand the selected cards make.
 func _middle_show_info() -> void:
+	var encore := run.phase == RunState.Phase.ENCORE
+	# On tour the theatre boxes stand at both ends; the Scenario's beats run along the top and
+	# the crowd's mood along the bottom.
+	var inset := BOX_SIZE.x + 6.0 if run.tour else 0.0
+	var width := area_w - 2.0 * inset
 	var col := VBoxContainer.new()
-	col.position = Vector2(0, 6)
-	col.size = Vector2(area_w, 100)
-	col.add_theme_constant_override("separation", 6)
+	col.position = Vector2(inset, 2 if run.tour else 6)
+	col.size = Vector2(width, 100)
+	col.add_theme_constant_override("separation", 3 if run.tour else 6)
 	middle.add_child(col)
+	if run.tour and not encore:
+		var strip := _scenario_strip(width)
+		if strip != null:
+			col.add_child(strip)
 	var patron := run.current_patron()
-	if patron != "":
-		var l := _wrapped("%s: %s" % [UiTheme.name_of(patron), UiTheme.text_of(patron)], 10, area_w)
+	if patron != "" and not encore:
+		var l := _wrapped("%s: %s" % [UiTheme.name_of(patron), UiTheme.text_of(patron)], 10, width)
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		l.add_theme_color_override("font_color", UiTheme.MULT.lightened(0.25))
 		col.add_child(l)
+	var goal := run.encore_target() if encore else run.show_target - run.show_score
 	var preview := _selected_cards()
 	if preview.is_empty():
-		col.add_child(_centred(UiTheme.title("Tap up to 5 cards, then press Play hand", 12, UiTheme.TEXT)))
+		var ask := "Encore: one hand worth %s" % UiTheme.number(goal) if encore else "Tap up to 5 cards, then press Play hand"
+		col.add_child(_centred(UiTheme.title(ask, 12, UiTheme.GOLD if encore else UiTheme.TEXT)))
 	else:
 		var hand_type := HandEvaluator.evaluate(preview, run.eval_options()).type
-		col.add_child(_centred(UiTheme.title(_hand_name(hand_type), 24, UiTheme.GOLD)))
-		var guess := run.preview(_selected_ids())
-		if guess >= 0.0:
-			var wins := guess >= run.show_target - run.show_score
-			var line := "Scores about %s%s" % [UiTheme.number(guess), "  -  enough to win the show!" if wins else ""]
+		col.add_child(_centred(UiTheme.title(_hand_name(hand_type), 22 if run.tour else 24, UiTheme.GOLD)))
+		var detail := _preview_detail(_selected_ids())
+		var refused: bool = detail.get("events", []).any(func(e: Dictionary) -> bool: return str(e["t"]) == "not_allowed")
+		if refused:
+			var why := "%s won't allow this hand: it would score nothing." % UiTheme.name_of(run.current_patron()) if run.current_patron() != "" else "Not allowed: this hand would score nothing."
+			var l := _wrapped(why, 11, width)
+			l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			l.add_theme_color_override("font_color", UiTheme.MULT.lightened(0.3))
+			col.add_child(l)
+		elif not detail.is_empty():
+			var guess := float(detail["total"])
+			var wins := guess >= goal
+			var line := "Scores about %s%s" % [UiTheme.number(guess), ("  -  the Encore lands!" if encore else "  -  enough to win the show!") if wins else ""]
 			col.add_child(_centred(UiTheme.label(line, 12, UiTheme.GOOD if wins else UiTheme.TEXT)))
+	if run.tour and not encore:
+		var spacer := Control.new()
+		spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		col.add_child(spacer)
+		col.add_child(_mood_meter(width))
+
+
+## run.preview(), remembered for the same cards until the run changes (every change is an
+## action in the log), since the screen refreshes more often than the selection changes.
+func _preview(ids: Array) -> float:
+	return float(_preview_detail(ids).get("total", -1.0))
+
+
+func _preview_detail(ids: Array) -> Dictionary:
+	var key := "%s|%d|%d" % [ids, run.action_log.size(), run.phase]
+	if key != _preview_key:
+		_preview_key = key
+		_preview_value = run.preview_detail(ids) if not ids.is_empty() else {}
+	return _preview_value
+
+
+## The picked hand's preview events, by the Jester (its index) that caused them.
+func _jester_shares() -> Dictionary:
+	var out := {}
+	if busy or run.phase != RunState.Phase.IN_SHOW or selected_hand.is_empty():
+		return out
+	for e: Dictionary in _preview_detail(_selected_ids()).get("events", []):
+		var src := str(e["src"])
+		if src.begins_with("zanni:"):
+			var i := int(src.get_slice("#", 1))
+			if not out.has(i):
+				out[i] = []
+			out[i].append(e)
+	return out
+
+
+## Scoring events added up: {points, mult, times (×Mult), ducats}.
+func _sum_effects(events: Array) -> Dictionary:
+	var sum := {"points": 0.0, "mult": 0.0, "times": 1.0, "ducats": 0}
+	for e: Dictionary in events:
+		match str(e["t"]):
+			"points":
+				sum["points"] += float(e["v"])
+			"mult":
+				sum["mult"] += float(e["v"])
+			"xmult":
+				sum["times"] *= float(e["v"])
+			"ducats":
+				sum["ducats"] += int(e["v"])
+	return sum
+
+
+## Events in words: "+20 Points, +4 Mult, x1.5 Mult" ("" when they add nothing).
+func _effect_text(events: Array) -> String:
+	var sum := _sum_effects(events)
+	var parts := []
+	if sum["points"] != 0.0:
+		parts.append("+%s Points" % UiTheme.number(sum["points"]))
+	if sum["mult"] != 0.0:
+		parts.append("+%s Mult" % _short(sum["mult"]))
+	if not is_equal_approx(sum["times"], 1.0):
+		parts.append("x%s Mult" % _short(sum["times"]))
+	if sum["ducats"] != 0:
+		parts.append("%+d ducats" % sum["ducats"])
+	return ", ".join(parts)
+
+
+## A small badge under a Jester with what it adds to the picked hand, in the Points blue,
+## the Mult red and the ×Mult orange; null when it adds nothing.
+func _share_badge(events: Array) -> Control:
+	var sum := _sum_effects(events)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 3)
+	if sum["points"] != 0.0:
+		row.add_child(UiTheme.title("+" + UiTheme.number(sum["points"]), 8, UiTheme.POINTS.lightened(0.35)))
+	if sum["mult"] != 0.0:
+		row.add_child(UiTheme.title("+" + _short(sum["mult"]), 8, UiTheme.MULT.lightened(0.25)))
+	if not is_equal_approx(sum["times"], 1.0):
+		row.add_child(UiTheme.title("x" + _short(sum["times"]), 8, Color("ff8a4a")))
+	if sum["ducats"] != 0:
+		row.add_child(UiTheme.title("%+d$" % sum["ducats"], 8, UiTheme.GOLD))
+	if row.get_child_count() == 0:
+		row.free()
+		return null
+	var badge := PanelContainer.new()
+	var style := UiTheme.box(Color(0.05, 0.03, 0.08, 0.88), UiTheme.GOLD.darkened(0.35), 3)
+	style.content_margin_left = 3
+	style.content_margin_right = 3
+	style.content_margin_top = 0
+	style.content_margin_bottom = 0
+	badge.add_theme_stylebox_override("panel", style)
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	badge.add_child(row)
+	return badge
+
+
+## What a Jester does right now, for its tip and details: its value from what it has grown
+## or from the run, what it adds to the picked hand, and what it sells for.
+func _jester_lines(index: int) -> Array:
+	var z := run.zanni[index]
+	var lines := []
+	if z.def_id == "z_capriccio" and str(z.state.get("hand", "")) != "":
+		lines.append("This show: x3 Mult on %s" % _hand_name(str(z.state["hand"])))
+	var key := "%d|%d|%d" % [index, run.action_log.size(), run.phase]
+	if not _now_cache.has(key):
+		_now_cache = {key: _effect_text(run.jester_now(index))}
+	var now: String = _now_cache[key]
+	if now != "":
+		lines.append("Right now: " + now)
+	var shares := _jester_shares()
+	if shares.has(index):
+		lines.append("On the picked cards: " + _effect_text(shares[index]))
+	for m in LazziCards.merges_for(run, index):
+		lines.append("With %s: merge into %s (in the Market)" % [UiTheme.name_of(run.zanni[int(m["other"])].def_id), UiTheme.name_of(m["duo"])])
+	if not z.state.get("eternal", false):
+		lines.append("Sells for %d ducats" % (z.sell_value() * run.stat("sell_pct") / 100))
+	return lines
 
 
 func _middle_payout() -> void:
@@ -743,6 +1187,12 @@ func _payout_name(src: String) -> String:
 			return "Unused discards"
 		"interest":
 			return "Interest"
+		"scenario":
+			return "Scenario beats"
+		"crowd":
+			return "The crowd walked out"
+		"encore":
+			return "Encore! (x2)"
 	if src.begins_with("zanni:"):
 		return UiTheme.name_of(src.get_slice(":", 1).get_slice("#", 0))
 	if src.begins_with("card:"):
@@ -784,6 +1234,8 @@ func _middle_shop() -> void:
 		v.price_text = str(r.offer_price(o))
 		v.position = Vector2(x, 42)
 		v.sway = i
+		var slot := i
+		_droppable(v, "top", "Drop to buy for %d" % r.offer_price(o), func() -> void: _act({"a": "buy", "slot": slot}))
 		middle.add_child(v)
 		x += 70
 	middle.add_child(_section("Packs", 14, 132))
@@ -796,6 +1248,8 @@ func _middle_shop() -> void:
 		v.price_text = str(r.offer_price(p))
 		v.position = Vector2(x, 146)
 		v.sway = i + 4
+		var pack_slot := i
+		_droppable(v, "top", "Drop to buy and open for %d" % r.offer_price(p), func() -> void: _act({"a": "buy_pack", "slot": pack_slot}))
 		middle.add_child(v)
 		x += 70
 	x = maxf(x + 24, 200)
@@ -805,9 +1259,11 @@ func _middle_shop() -> void:
 		if w[0] == "" or w[1]:
 			continue
 		var v := _named_view("warrant", w[0], SHOP_CARD, {"zone": "warrant", "index": w[2]})
-		v.price_text = str(ContentDB.get_def(w[0]).cost)
+		v.price_text = str(r.warrant_price(w[0]))
 		v.position = Vector2(x, 146)
 		v.sway = int(w[2]) + 7
+		var warrant_index: int = w[2]
+		_droppable(v, "top", "Drop to buy for %d" % r.warrant_price(w[0]), func() -> void: _act({"a": "buy_warrant", "index": warrant_index}))
 		middle.add_child(v)
 		x += 70
 
@@ -829,6 +1285,9 @@ func _middle_pack() -> void:
 			v = _named_view(entry["kind"], entry["id"], item_card, {"zone": "pack_item", "index": i})
 			v.edition = str(entry.get("edition", ""))
 		v.position = Vector2(i * 56, 16)
+		var pick_index := i
+		_droppable(v, "top", "Drop to take it" + (" (it acts on the picked cards)" if not selected_hand.is_empty() else ""),
+			func() -> void: _act({"a": "pick", "index": pick_index, "cards": _selected_ids()}))
 		middle.add_child(v)
 
 
@@ -845,8 +1304,11 @@ func _section(text: String, x: float, y := 0.0) -> Label:
 ## right, one after another.
 func _build_hand() -> void:
 	_clear(hand_row)
-	if not busy and run.phase != RunState.Phase.IN_SHOW and run.phase != RunState.Phase.PACK:
+	var encore_live: bool = run.phase == RunState.Phase.ENCORE and run.show_counters.get("encore", "") == "live"
+	if not busy and run.phase != RunState.Phase.IN_SHOW and run.phase != RunState.Phase.PACK and not encore_live:
 		hand_layout = {}
+		if run.phase == RunState.Phase.CHOOSE_SHOW and run.tour:
+			_build_tonight()
 		return
 	var previous := hand_layout
 	hand_layout = {}
@@ -891,6 +1353,55 @@ func _build_hand() -> void:
 			dealt += 1
 	if dealt > 0 and not previous.is_empty():
 		Feel.play("deal", 1.1)
+
+
+## Before a show on tour, where the hand will be: the city (its twist and shop) and the
+## Scenario on offer tonight, beat by beat with what each pays.
+func _build_tonight() -> void:
+	var city_w := floorf(area_w * 0.42)
+	var city_panel := PanelContainer.new()
+	city_panel.add_theme_stylebox_override("panel", UiTheme.panel_box(Color(UiTheme.PANEL_DARK, 0.94), Color("8a5a2a")))
+	city_panel.position = Vector2(0, 4)
+	city_panel.size = Vector2(city_w, 126)
+	hand_row.add_child(city_panel)
+	var city_row := HBoxContainer.new()
+	city_row.add_theme_constant_override("separation", 8)
+	city_panel.add_child(city_row)
+	var card := CardView.new(Vector2(64, 90))
+	card.kind = "city"
+	card.def_id = run.city
+	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	city_row.add_child(card)
+	var about := VBoxContainer.new()
+	about.add_theme_constant_override("separation", 2)
+	city_row.add_child(about)
+	var text_w := city_w - 96.0
+	about.add_child(UiTheme.title(UiTheme.name_of(run.city), 14, UiTheme.GOLD))
+	about.add_child(UiTheme.label(TranslationServer.translate(run.city + ".gloss"), 8, UiTheme.MUTED))
+	about.add_child(_wrapped(UiTheme.text_of(run.city), 9, text_w))
+	about.add_child(_wrapped("Shop: " + TranslationServer.translate(run.city + ".lean"), 8, text_w))
+	if not ContentDB.get_def(run.city).data.get("options", []).is_empty():
+		about.add_child(_wrapped("You chose: " + str(ContentDB.get_def(run.city).data["options"][run.town_option]), 8, text_w))
+	var def := ContentDB.get_def(run.scenario)
+	if def == null:
+		return
+	var scen := PanelContainer.new()
+	scen.add_theme_stylebox_override("panel", UiTheme.panel_box(Color(UiTheme.PANEL_DARK, 0.94), UiTheme.GOLD.darkened(0.2)))
+	scen.position = Vector2(city_w + 8.0, 4)
+	scen.size = Vector2(area_w - city_w - 8.0, 126)
+	hand_row.add_child(scen)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 2)
+	scen.add_child(col)
+	col.add_child(UiTheme.label("Tonight's Scenario (tier %d)" % int(def.data["tier"]), 8, UiTheme.MUTED))
+	col.add_child(UiTheme.title(UiTheme.name_of(def.id), 13, UiTheme.GOLD))
+	var rewards := ["+3 ducats", "x2 Mult on that hand", "x3 Mult on that hand, +5 ducats"]
+	var beats: Array = def.data["beats"]
+	var w := scen.size.x - 20.0
+	for i in beats.size():
+		col.add_child(_wrapped("%d. %s  ->  %s" % [i + 1, ScenarioCards.beat_text(beats[i]), rewards[i]], 9, w))
+	col.add_child(_wrapped("Perform it and your next three hands must hit these beats in order. A miss is a Fiasco: that hand scores half.", 8, w))
 
 
 ## The gap between hand cards: a little air when there's room, overlapping when there isn't.
@@ -985,15 +1496,23 @@ func _build_buttons() -> void:
 	var r := run
 	match r.phase:
 		RunState.Phase.CHOOSE_SHOW:
-			_add_button("Play " + SHOW_NAMES[r.show_index], func() -> void: _act({"a": "select_show"}), false, UiTheme.MULT, true)
+			if r.tour and r.scenario != "":
+				_add_button("Perform the Scenario", func() -> void: _act({"a": "select_show", "perform": true}), false, UiTheme.GOLD.darkened(0.25), true)
+				_add_button("Improvise", func() -> void: _act({"a": "select_show"}), false, UiTheme.MULT)
+			else:
+				_add_button("Play " + SHOW_NAMES[r.show_index], func() -> void: _act({"a": "select_show"}), false, UiTheme.MULT, true)
 			if r.show_index < Shows.PATRON:
 				_add_button("Skip for the Favor", func() -> void: _act({"a": "skip_show"}))
 			if r.town_swaps < r.stat("patron_swaps"):
 				_add_button("Swap Patron (10)", func() -> void: _act({"a": "swap_patron"}))
 		RunState.Phase.IN_SHOW:
 			var picked := selected_hand.size()
+			# Settings > Buttons can put Discard before Play (as Balatro's button order does).
+			if Settings.left_handed:
+				_add_button("Discard", _on_discard, picked == 0, UiTheme.MULT)
 			_add_button("Play hand", _on_play, picked == 0 or picked > r.stat("max_play"), UiTheme.POINTS, true)
-			_add_button("Discard", _on_discard, picked == 0, UiTheme.MULT)
+			if not Settings.left_handed:
+				_add_button("Discard", _on_discard, picked == 0, UiTheme.MULT)
 			_add_button("Sort by suit" if sort_by == "rank" else "Sort by rank", _toggle_sort)
 		RunState.Phase.CASH_OUT:
 			var total := 0
@@ -1007,6 +1526,26 @@ func _build_buttons() -> void:
 			if selection.get("zone", "") == "pack_item":
 				_add_button("Pick", func() -> void: _act({"a": "pick", "index": selection["index"], "cards": _selected_ids()}), false, UiTheme.POINTS, true)
 			_add_button("Skip pack", func() -> void: _act({"a": "skip_pack"}))
+		RunState.Phase.MAP:
+			var roads := r.roads()
+			var col := int(selection["index"]) if selection.get("zone", "") == "city" else (int(roads[0]) if not roads.is_empty() else -1)
+			if col >= 0:
+				var dest: String = (r.route[r.route_row + 1] as Array)[col]["city"]
+				var options: Array = ContentDB.get_def(dest).data.get("options", [])
+				if options.is_empty():
+					_add_button("Travel to " + UiTheme.name_of(dest), func() -> void: _act({"a": "travel", "index": col}), false, UiTheme.GOLD.darkened(0.25), true)
+				else:
+					for o in options.size():
+						var option := o
+						_add_button("%s: %s" % [UiTheme.name_of(dest), options[o]], func() -> void: _act({"a": "travel", "index": col, "slot": option}), false, UiTheme.GOLD.darkened(0.25), o == 0)
+		RunState.Phase.ENCORE:
+			if r.show_counters.get("encore", "") == "live":
+				var picked := selected_hand.size()
+				_add_button("Play the Encore", _on_play, picked == 0 or picked > r.stat("max_play"), UiTheme.GOLD.darkened(0.25), true)
+				_add_button("Sort by suit" if sort_by == "rank" else "Sort by rank", _toggle_sort)
+			else:
+				_add_button("Encore!", func() -> void: _act({"a": "encore"}), false, UiTheme.GOLD.darkened(0.25), true)
+				_add_button("Take a bow", func() -> void: _act({"a": "bow"}), false, UiTheme.PANEL_LIGHT)
 	_contextual_buttons()
 	if r.phase == RunState.Phase.IN_SHOW:
 		_add_deck_pile()
@@ -1032,8 +1571,12 @@ func _contextual_buttons() -> void:
 	match zone:
 		"zanni":
 			var z := run.zanni[i]
+			if run.phase == RunState.Phase.SHOP:
+				for m in LazziCards.merges_for(run, i):
+					var merge: Dictionary = m
+					_add_button("Merge: " + UiTheme.name_of(merge["duo"]), func() -> void: _act({"a": "merge", "index": merge["index"], "other": merge["other"]}), false, UiTheme.GOLD.darkened(0.25), true)
 			if not z.state.get("eternal", false):
-				_add_button("Sell +%d" % z.sell_value(), func() -> void: _act({"a": "sell", "zone": "zanni", "index": i}))
+				_add_button("Sell +%d" % (z.sell_value() * run.stat("sell_pct") / 100), func() -> void: _act({"a": "sell", "zone": "zanni", "index": i}))
 			_add_button("<", func() -> void: _move_jester(i, -1), i == 0)
 			_add_button(">", func() -> void: _move_jester(i, 1), i == run.zanni.size() - 1)
 		"consumable":
@@ -1084,6 +1627,12 @@ func _build_overlay() -> void:
 	col.add_child(_centred(UiTheme.title("The show is over" if lost else "All 8 towns conquered!", 24, accent)))
 	var what := UiTheme.name_of(r.challenge) if r.challenge != "" else "%s, Stake %d" % [UiTheme.name_of(r.deck_id), r.stake]
 	col.add_child(_centred(UiTheme.label("Town %d - %s   |   %s" % [r.town, SHOW_NAMES[r.show_index], what], 10, UiTheme.MUTED)))
+	if lost:
+		var reason := _loss_reason(r)
+		var why := _wrapped(reason, 11, 396)
+		why.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		why.add_theme_color_override("font_color", UiTheme.MULT.lightened(0.35))
+		col.add_child(why)
 	col.add_child(_end_stats(r))
 	if not r.zanni.is_empty():
 		col.add_child(UiTheme.label("Your Jesters", 9, UiTheme.MUTED))
@@ -1101,6 +1650,8 @@ func _build_overlay() -> void:
 	var ranked: bool = daily and not Game.run_meta.get("practice", false)
 	if ranked:
 		col.add_child(_centred(UiTheme.label("Your daily run is handed in." if Online.signed_in() else "Log in to rank your daily runs.", 10, UiTheme.GOOD)))
+	if Game.run_meta.get("seeded", false):
+		col.add_child(_centred(UiTheme.label("A seeded run: it doesn't count for leaderboards or unlocks.", 10, UiTheme.MUTED)))
 	var buttons_row := HBoxContainer.new()
 	buttons_row.add_theme_constant_override("separation", 6)
 	buttons_row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -1116,6 +1667,7 @@ func _build_overlay() -> void:
 			refresh(), 13, UiTheme.MULT))
 	if daily:
 		buttons_row.add_child(UiTheme.button("Leaderboards", func() -> void: _open(LeaderboardSheet.new("daily")), 12, UiTheme.GOLD.darkened(0.3)))
+	buttons_row.add_child(_copy_seed_button(r.seed_text))
 	buttons_row.add_child(UiTheme.button("Main menu", func() -> void:
 		Game.finish_run()
 		back_to_menu.emit(), 12, UiTheme.POINTS))
@@ -1126,6 +1678,27 @@ func _build_overlay() -> void:
 		var t := panel.create_tween().set_parallel()
 		t.tween_property(panel, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		t.tween_property(panel, "modulate:a", 1.0, 0.18)
+
+
+## Copies the run's seed, to replay it as a Seeded run or share it.
+static func _copy_seed_button(seed_text: String) -> Button:
+	var b := UiTheme.button("Copy seed", func() -> void: pass, 12)
+	b.pressed.connect(func() -> void:
+		Feel.play("click")
+		DisplayServer.clipboard_set(seed_text)
+		b.text = "Copied: " + seed_text)
+	return b
+
+
+## Why the run ended: given up, beaten by a Patron (and what it does), or out of hands.
+func _loss_reason(r: RunState) -> String:
+	var score := "%s of %s points" % [UiTheme.number(r.show_score), UiTheme.number(r.show_target)]
+	if Game.run_meta.get("gave_up", false):
+		return "You gave up at the %s." % SHOW_NAMES[r.show_index]
+	var patron := r.current_patron()
+	if patron != "":
+		return "Defeated by %s: %s. You scored %s." % [UiTheme.name_of(patron), _sentence(UiTheme.text_of(patron)).trim_suffix("."), score]
+	return "Out of hands at the %s: you scored %s." % [SHOW_NAMES[r.show_index], score]
 
 
 ## The numbers of a finished run, in two columns.
@@ -1243,6 +1816,8 @@ func _on_play() -> void:
 	var before := run.show_score
 	var held := run.hand.filter(func(c: PlayingCard) -> bool: return not ids.has(c.id))
 	var from := _hand_positions()
+	var mood_before := run.mood
+	var encore_hand := run.phase == RunState.Phase.ENCORE
 	var result := Game.act({"a": "play", "cards": ids}, true)
 	if not result["ok"]:
 		message = _sentence(str(result["error"]))
@@ -1251,6 +1826,7 @@ func _on_play() -> void:
 	busy = true
 	scoring = true
 	skipping = false
+	CardArt.hold = true
 	Engine.time_scale = float(Settings.speed)
 	held_while_scoring = held
 	selected_hand.clear()
@@ -1301,11 +1877,19 @@ func _on_play() -> void:
 		_feel_event(e, target, n)
 		await _wait(step)
 	var total := float(result["total"])
-	await _slam(total, run.phase == RunState.Phase.CASH_OUT)
+	var won_now := run.phase == RunState.Phase.CASH_OUT or (run.phase == RunState.Phase.ENCORE and not encore_hand)
+	await _slam(total, won_now)
 	for i in played_views.size():
 		_fly_off(played_views[i], i * 0.04)
-	await _count_up(lbl_score, before, before + total)
-	if run.phase == RunState.Phase.CASH_OUT:
+	if encore_hand:
+		var landed := bool(result.get("encore", false))
+		Feel.play("applause" if landed else "lose")
+		await _banner("BIS! CASH-OUT x2" if landed else "THE ENCORE FELL FLAT", UiTheme.GOLD if landed else UiTheme.MULT)
+	else:
+		await _count_up(lbl_score, before, before + total)
+		if run.tour:
+			_crowd_reaction(events, mood_before)
+	if won_now and not encore_hand:
 		Feel.play("win")
 		Feel.play("applause")
 		Feel.intensity(1.0)
@@ -1319,9 +1903,32 @@ func _on_play() -> void:
 		await _wait(0.4)
 	scoring = false
 	skipping = false
+	CardArt.hold = false
 	Engine.time_scale = 1.0
 	busy = false
 	Game.changed.emit()
+
+
+## The theatre boxes answer a hand: a Fiasco is booed, a hit beat gasped at, a rising mood
+## cheered, a falling one booed; an emptied house leaves a note.
+func _crowd_reaction(events: Array, mood_before: int) -> void:
+	var fiasco := events.any(func(e: Dictionary) -> bool: return e["src"] == "fiasco")
+	var beat := events.any(func(e: Dictionary) -> bool: return e["src"] == "scenario")
+	var kind := "boo" if fiasco else ("gasp" if beat else ("cheer" if run.mood > mood_before or run.ovation else ("boo" if run.mood < mood_before else "")))
+	for box in boxes:
+		box.mood = run.mood
+		if kind != "":
+			box.react(kind)
+		if beat:
+			box.react("cheer")
+	if fiasco:
+		Feel.play("error")
+		message = "Fiasco! The Scenario is over: that hand scored half."
+	elif run.mood <= 0 and mood_before > 0:
+		message = "The crowd walked out: the show will pay 3 ducats less."
+	elif run.ovation:
+		Feel.play("applause")
+		message = "Standing ovation! Your next hand gets x1.5 Mult."
 
 
 ## A tap, click or key while a hand is scoring fast-forwards to the result.
@@ -1597,6 +2204,8 @@ func _selected_def_id() -> String:
 			return run.town_warrant if i == 0 else run.shop.extra_warrant
 		"pack_item":
 			return str(run.pack["items"][i].get("id", ""))
+		"city":
+			return str((run.route[run.route_row + 1] as Array)[i]["city"])
 	return ""
 
 
@@ -1611,6 +2220,8 @@ func _describe_selection(id: String) -> String:
 	var gloss := TranslationServer.translate(id + ".gloss")
 	if gloss != id + ".gloss":
 		lines.push_front("(" + gloss + ")")
+	if zone == "city":
+		lines.append("Shop: " + TranslationServer.translate(id + ".lean"))
 	var def := ContentDB.get_def(id)
 	if def != null and KIND_HELP.has(def.kind):
 		var what: String = KIND_HELP[def.kind]
@@ -1620,6 +2231,7 @@ func _describe_selection(id: String) -> String:
 		lines.append(what)
 	if zone == "zanni":
 		var z := run.zanni[i]
+		lines.append_array(_jester_lines(i).filter(func(l: String) -> bool: return not l.begins_with("Sells")))
 		if z.edition != "":
 			lines.append("%s: %s" % [UiTheme.name_of(z.edition), UiTheme.text_of(z.edition)])
 		if z.state.get("eternal", false):

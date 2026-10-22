@@ -4,15 +4,21 @@ extends RefCounted
 ## - Sound: music and effects volume (0–1) and mutes.
 ## - Display: graphics quality (Low/Medium/High), frame-rate cap, CRT effect (Off/Light/Full),
 ##   Reduce motion (no shake, tilt, CRT curve or moving backdrop; starts on when the browser or
-##   system asks for reduced motion).
-## - Play: game speed (scoring 1x/2x/4x), text and card size, vibration strength, card back.
+##   system asks for reduced motion), high-contrast suits (four suit colours).
+## - Play: game speed (scoring 0.5x to 4x), screen shake, text and card size, vibration
+##   strength, which side Play and Discard sit on, card back.
 ## - Progress flags: How to play seen, account offered, the first-run tips.
 
 const PATH := "user://settings.json"
+## Saved with the settings; older files get the new defaults where noted in load_saved().
+const VERSION := 2
 const QUALITY_NAMES := ["Low", "Medium", "High"]
 const FPS_CHOICES := [30, 60, 120]
 const CRT_NAMES := ["Off", "Light", "Full"]
-const SPEEDS := [1, 2, 4]
+const SPEEDS := [0.5, 1.0, 2.0, 4.0]
+const SHAKE_NAMES := ["Off", "Low", "Normal", "Strong"]
+## How hard the screen shakes at each Screen shake setting.
+const SHAKE_SCALE := [0.0, 0.5, 1.0, 1.6]
 const SIZE_NAMES := ["Small", "Normal", "Large"]
 const VIBRATION_NAMES := ["Off", "Light", "Strong"]
 const CARD_BACKS := ["Harlequin", "Sun and moon", "Venetian mask", "Curtain", "Night sky", "Gold filigree"]
@@ -25,10 +31,15 @@ static var music_volume := 0.7
 static var quality := 2
 static var fps := 60
 static var crt := 2
-static var speed := 1
+static var speed := 1.0
+static var shake := 2
 static var size := 1
 static var vibration_level := 1
 static var card_back := 0
+## Four suit colours (Spades black, Hearts red, Clubs blue, Diamonds orange) instead of two.
+static var high_contrast := false
+## Discard on the left of Play, for playing with the left thumb.
+static var left_handed := false
 ## Whether How to play has been closed once; the first run opens it until then.
 static var seen_help := false
 ## Whether "Save your progress" has been offered after the first run (it's offered once).
@@ -39,8 +50,11 @@ static var tutorial_step := 0
 
 static func load_saved() -> void:
 	reduce_motion = _system_prefers_less_motion()
-	# Phones and browsers start on Medium; computers on High.
-	quality = 1 if OS.has_feature("mobile") or OS.has_feature("web") else 2
+	# Phones and browsers start on Medium graphics, computers on High. The CRT effect starts off
+	# (the game's look is painted and sharp now; it can be turned on in Settings).
+	var phone := OS.has_feature("mobile") or OS.has_feature("web")
+	quality = 1 if phone else 2
+	crt = 0
 	if FileAccess.file_exists(PATH):
 		var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(PATH))
 		if data is Dictionary:
@@ -51,8 +65,12 @@ static func load_saved() -> void:
 			music_volume = clampf(float(data.get("music_volume", music_volume)), 0.0, 1.0)
 			quality = clampi(int(data.get("quality", quality)), 0, 2)
 			fps = int(data.get("fps", fps)) if FPS_CHOICES.has(int(data.get("fps", fps))) else 60
-			crt = clampi(int(data.get("crt", crt)), 0, 2)
-			speed = int(data.get("speed", speed)) if SPEEDS.has(int(data.get("speed", speed))) else 1
+			# Settings saved before the painted look (no "v") had the CRT on by default: off once.
+			crt = clampi(int(data.get("crt", crt)), 0, 2) if int(data.get("v", 1)) >= VERSION else 0
+			speed = float(data.get("speed", speed)) if SPEEDS.has(float(data.get("speed", speed))) else 1.0
+			shake = clampi(int(data.get("shake", shake)), 0, SHAKE_NAMES.size() - 1)
+			high_contrast = bool(data.get("high_contrast", high_contrast))
+			left_handed = bool(data.get("left_handed", left_handed))
 			size = clampi(int(data.get("size", size)), 0, 2)
 			var old_vibration: Variant = data.get("vibration")
 			vibration_level = clampi(int(data.get("vibration_level", 1 if old_vibration == null or bool(old_vibration) else 0)), 0, 2)
@@ -66,12 +84,17 @@ static func save() -> void:
 	var f := FileAccess.open(PATH, FileAccess.WRITE)
 	if f != null:
 		f.store_string(JSON.stringify({
-			"reduce_motion": reduce_motion, "sound": sound, "music": music,
+			"v": VERSION, "reduce_motion": reduce_motion, "sound": sound, "music": music,
 			"sfx_volume": sfx_volume, "music_volume": music_volume, "quality": quality, "fps": fps,
-			"crt": crt, "speed": speed, "size": size, "vibration_level": vibration_level,
-			"card_back": card_back, "seen_help": seen_help, "asked_account": asked_account,
-			"tutorial_step": tutorial_step,
+			"crt": crt, "speed": speed, "shake": shake, "size": size, "vibration_level": vibration_level,
+			"card_back": card_back, "high_contrast": high_contrast, "left_handed": left_handed,
+			"seen_help": seen_help, "asked_account": asked_account, "tutorial_step": tutorial_step,
 		}))
+
+
+## A speed as the settings show it: "0.5x", "1x", "4x".
+static func speed_name(value: float) -> String:
+	return ("%sx" % ("%.1f" % value).trim_suffix(".0"))
 
 
 ## Text is drawn this much bigger or smaller (Text & card size).

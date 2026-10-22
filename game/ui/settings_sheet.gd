@@ -2,8 +2,10 @@ class_name SettingsSheet
 extends Sheet
 ## Every setting in one place, in two columns:
 ##   Sound: music and effects volume, each with a mute.
-##   Display: graphics quality, frame rate, CRT effect, Reduce motion.
-##   Play: game speed, text and card size, vibration, the card back, the first-run tips.
+##   Display: graphics quality, frame rate, CRT effect, Reduce motion, suit colours, which
+##   side Play and Discard sit on.
+##   Play: game speed, screen shake, text and card size, vibration, the card back, the
+##   first-run tips.
 ##   Account: who's signed in, the cloud save, and the way to log in, out, or to the profile.
 ## Every change is saved and applied at once.
 
@@ -43,9 +45,16 @@ func _build() -> void:
 	left.add_child(_choice("Frame rate", Settings.FPS_CHOICES.map(func(f: int) -> String: return "%d fps" % f), Settings.FPS_CHOICES.find(Settings.fps), func(i: int) -> void: Settings.fps = Settings.FPS_CHOICES[i]))
 	left.add_child(_choice("CRT effect", Settings.CRT_NAMES, Settings.crt, func(i: int) -> void: Settings.crt = i))
 	left.add_child(_choice("Reduce motion", ["Off", "On"], 1 if Settings.reduce_motion else 0, func(i: int) -> void: Settings.reduce_motion = i == 1))
+	left.add_child(_choice("Suit colours", ["Two", "Four"], 1 if Settings.high_contrast else 0, func(i: int) -> void:
+		Settings.high_contrast = i == 1
+		CardArt.clear()))
+	left.add_child(_choice("Buttons", ["Play first", "Discard first"], 1 if Settings.left_handed else 0, func(i: int) -> void: Settings.left_handed = i == 1))
 
 	right.add_child(_heading("Play"))
-	right.add_child(_choice("Game speed", Settings.SPEEDS.map(func(s: int) -> String: return "%dx" % s), Settings.SPEEDS.find(Settings.speed), func(i: int) -> void: Settings.speed = Settings.SPEEDS[i]))
+	right.add_child(_choice("Game speed", Settings.SPEEDS.map(func(s: float) -> String: return Settings.speed_name(s)), Settings.SPEEDS.find(Settings.speed), func(i: int) -> void: Settings.speed = Settings.SPEEDS[i]))
+	right.add_child(_choice("Screen shake", Settings.SHAKE_NAMES, Settings.shake, func(i: int) -> void:
+		Settings.shake = i
+		Feel.shake(4.0)))
 	right.add_child(_choice("Text & cards", Settings.SIZE_NAMES, Settings.size, func(i: int) -> void:
 		Settings.size = i
 		CardArt.clear()))
