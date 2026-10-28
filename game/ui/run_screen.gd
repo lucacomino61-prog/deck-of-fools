@@ -123,6 +123,16 @@ var _said: Dictionary = {}
 var _carry_pick := 0
 ## Where the middle's words start below the goal bar during a show.
 const GOAL_H := 24.0
+## The practice town's explaining tips already read ("Got it").
+var _practice_seen := {}
+## The best-hand helper's button, while it's on the table (the hand tips light it too).
+var _best_button: Button
+## The best-hand helper's answer for the cards in hand (worked out once per hand).
+var _best_key := ""
+var _best_cache := {}
+## How the last hand added up, and which show it was in ("town/show").
+var _receipt: Array[String] = []
+var _receipt_key := ""
 
 
 func _ready() -> void:
@@ -133,8 +143,14 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_rebuild_screen)
 	# A new run with today's card says so.
 	var card := str(run.extras.get("day_card", "")) if run != null else ""
-	if card != "" and run.town == 1 and run.show_index == 0 and run.phase == RunState.Phase.CHOOSE_SHOW:
+	var fresh := run != null and run.town == 1 and run.show_index == 0 and run.phase == RunState.Phase.CHOOSE_SHOW
+	if fresh and card != "":
 		message = "Today's card travels with you: %s. %s" % [UiTheme.name_of(card), _sentence(UiTheme.text_of(card))]
+	# One new part of the game per run (Learning): the first says what this run has, the
+	# others what's new in it.
+	if fresh and run.learning < Learning.FULL:
+		var news: String = "Your first tour: poker hands, the four shows and Jesters. Each run you finish adds a new part of the game." if run.learning == 0 else "New this run: " + Learning.NEWS[run.learning]
+		message = news if message == "" else news + "\n\n" + message
 	refresh()
 	if not Settings.seen_help and Settings.tutorial_step < 0:
 		UiTheme.show_sheet(HowToPlay.new())
@@ -426,19 +442,33 @@ func _advance_coach() -> void:
 
 func _build_coach() -> void:
 	_clear(coach)
+	if busy:
+		return
+	if run.practice:
+		_build_practice_coach()
+		return
 	_advance_coach()
 	var s := Settings.tutorial_step
-	if busy or s < 0 or s >= COACH.size() or run.phase != COACH[s][0]:
+	if s < 0 or s >= COACH.size() or run.phase != COACH[s][0]:
 		return
-	# The rest of the screen dims around what the tip is about; the tip sits beside it.
-	var light := Spotlight.new(_coach_targets(str(COACH[s][3])))
+	var actions: Array = []
+	if COACH[s][2]:
+		actions.append(["Got it", func() -> void: _coach_to(s + 1), UiTheme.POINTS])
+	actions.append(["Skip tips", func() -> void: _coach_to(-1), Color.TRANSPARENT])
+	_show_coach("First run  -  tip %d of %d" % [s + 1, COACH.size()], COACH[s][1], str(COACH[s][3]), actions)
+
+
+## A tip with the rest of the screen dimmed around what it's about (`target`, see
+## _coach_targets), and buttons as [label, callable, colour].
+func _show_coach(header: String, text: String, target: String, actions: Array) -> void:
+	var light := Spotlight.new(_coach_targets(target))
 	light.size = Vector2(stage_w, 360)
 	coach.add_child(light)
 	var panel := PanelContainer.new()
 	panel.add_theme_stylebox_override("panel", UiTheme.panel_box(Color(UiTheme.PANEL_DARK, 0.97), UiTheme.GOLD))
 	# Taps go through the box itself, to its buttons only.
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.size = Vector2(minf(320.0, area_w - 20.0), 0)
+	panel.size = Vector2(minf(340.0, area_w - 20.0), 0)
 	light.note = panel
 	var col := VBoxContainer.new()
 	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -446,20 +476,82 @@ func _build_coach() -> void:
 	panel.add_child(col)
 	var top := HBoxContainer.new()
 	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var step_label := UiTheme.label("First run  -  tip %d of %d" % [s + 1, COACH.size()], 8, UiTheme.GOLD)
+	var step_label := UiTheme.label(header, 8, UiTheme.GOLD)
 	step_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(step_label)
-	if COACH[s][2]:
-		top.add_child(UiTheme.button("Got it", func() -> void: _coach_to(s + 1), 9, UiTheme.POINTS))
-	top.add_child(UiTheme.button("Skip tips", func() -> void: _coach_to(-1), 9))
+	for a: Array in actions:
+		top.add_child(UiTheme.button(str(a[0]), a[1], 9, a[2]))
 	col.add_child(top)
-	col.add_child(_wrapped(COACH[s][1], 10, panel.size.x - 16.0))
+	col.add_child(_wrapped(text, 10, panel.size.x - 16.0))
 	panel.position = Vector2((stage_w - panel.size.x) / 2.0, 4.0)
 	coach.add_child(panel)
 	if not Settings.reduce_motion:
 		for node: Control in [light, panel]:
 			node.modulate.a = 0.0
 			node.create_tween().tween_property(node, "modulate:a", 1.0, 0.25)
+
+
+## The practice town's tips, picked from where the player is: one thing at a time, from making
+## a poker hand to the Patron. Tips that only explain wait for "Got it".
+func _build_practice_coach() -> void:
+	var r := run
+	var played := int(r.show_counters.get("hands_played", 0))
+	var tip: Array = []
+	match r.phase:
+		RunState.Phase.CHOOSE_SHOW:
+			match r.show_index:
+				Shows.MATINEE:
+					tip = ["This is a practice town: four short shows, and you can't lose. Press the button to start the first show, the Matinee.", "main", ""]
+				Shows.EVENING:
+					if not r.zanni.is_empty():
+						tip = ["Your Jester sits at the top. From now on it adds its bonus to every hand you play. Tap it any time to read what it does.", "top", "jester"]
+				Shows.GALA:
+					tip = ["Each show asks for more points than the last. The Gala is the third show of every town.", "main", ""]
+				Shows.PATRON:
+					tip = ["The last show of every town is the Patron. Each Patron has a rule that makes the show harder: read it on its panel.", "middle", "patron"]
+		RunState.Phase.IN_SHOW:
+			if r.show_index == Shows.MATINEE and played == 0:
+				if selected_hand.is_empty():
+					tip = ["Pick cards that make a poker hand: two of the same number is a Pair. The gold button picks the best hand in your cards for you.", "hand", ""]
+				else:
+					tip = ["The table names your hand and what it will score. Press Play hand.", "play", ""]
+			elif r.show_index == Shows.MATINEE and played > 0:
+				tip = ["Score = Points x Mult. The panel on the left shows how your last hand added up. Fill the bar to the target to win the show.", "info", "receipt"]
+			elif r.show_index == Shows.EVENING and played == 0:
+				tip = ["Not happy with your cards? Select some and press Discard to swap them for new ones. You have a few discards in every show.", "discard", "discard"]
+		RunState.Phase.CASH_OUT:
+			if r.show_index == Shows.MATINEE:
+				tip = ["Show won! You earn ducats for winning, and one more for every hand you didn't need.", "main", ""]
+		RunState.Phase.SHOP:
+			if r.zanni.is_empty() and not r.won:
+				tip = ["This is the Market. Buy a Jester: tap one, then Buy. A Jester helps every hand for the rest of the run.", "middle", ""]
+	if tip.is_empty() or _practice_seen.has(str(tip[2])):
+		return
+	var actions: Array = []
+	if str(tip[2]) != "":
+		var key := str(tip[2])
+		actions.append(["Got it", func() -> void:
+			Feel.play("click")
+			_practice_seen[key] = true
+			_build_coach(), UiTheme.POINTS])
+	actions.append(["Skip practice", _skip_practice, Color.TRANSPARENT])
+	_show_coach("Practice town", tip[0], tip[1], actions)
+
+
+## Leaves the practice town for a first real tour (or the menu, when a tour is saved).
+func _skip_practice() -> void:
+	Feel.play("click")
+	Settings.practice_done = true
+	Settings.save()
+	_leave_practice()
+
+
+func _leave_practice() -> void:
+	if Game.has_saved_run():
+		back_to_menu.emit()
+		return
+	Game.new_run(run.deck_id, 1)
+	restart()
 
 
 ## What a tip's spotlight lights (see COACH).
@@ -475,10 +567,21 @@ func _coach_targets(what: String) -> Array[Control]:
 			for c in hand_row.get_children():
 				if c is CardView and not c.is_queued_for_deletion():
 					out.append(c)
+			if _best_button != null and is_instance_valid(_best_button) and not _best_button.is_queued_for_deletion():
+				out.append(_best_button)
 		"goal":
 			out.append(goal)
 		"middle":
 			out.append(middle)
+		"info":
+			out.append(info_text.get_parent().get_parent())
+		"top":
+			for v in jester_views:
+				out.append(v)
+		"discard":
+			for b in buttons.get_children():
+				if b is Button and not b.is_queued_for_deletion() and (b as Button).text == "Discard":
+					out.append(b)
 	return out
 
 
@@ -593,6 +696,11 @@ func _update_info() -> void:
 		var card := _hand_card(selected_hand[0])
 		info_name.text = _card_name(card)
 		info_text.text = _describe_card(card)
+	elif not _receipt.is_empty() and _receipt_key == "%d/%d" % [run.town, run.show_index] \
+			and run.phase in [RunState.Phase.IN_SHOW, RunState.Phase.ENCORE, RunState.Phase.CASH_OUT]:
+		# The last hand's receipt, until the show is over.
+		info_name.text = "How your last hand scored"
+		info_text.text = "\n".join(_receipt)
 	else:
 		info_name.text = ""
 		info_text.text = _phase_hint()
@@ -602,11 +710,11 @@ func _phase_hint() -> String:
 	match run.phase:
 		RunState.Phase.CHOOSE_SHOW:
 			var skip := ""
-			if run.show_index < Shows.PATRON and run.town_favors[run.show_index] != "":
+			if run.show_index < Shows.PATRON and run.has_part("favors") and run.town_favors[run.show_index] != "":
 				skip = " Skipping it gives %s: %s" % [UiTheme.name_of(run.town_favors[run.show_index]), _sentence(_favor_text(run.show_index))]
 			if run.tour:
 				return "Perform tonight's Scenario for big rewards, improvise, or skip the show for its Favor." + skip
-			return "Play this show, or skip it to take its Favor." + skip
+			return ("Play this show, or skip it to take its Favor." if run.has_part("favors") else "Press Play to start the show.") + skip
 		RunState.Phase.IN_SHOW:
 			if run.scenario_on:
 				return "Scenario: your next hand must be %s." % ScenarioCards.beat_text((ContentDB.get_def(run.scenario).data["beats"] as Array)[run.scenario_beat])
@@ -1121,7 +1229,7 @@ func _middle_shows() -> void:
 		col.add_child(UiTheme.label("Score at least", 8, UiTheme.MUTED))
 		col.add_child(UiTheme.title(UiTheme.number(r.target_for_show(i)), 16, UiTheme.GOLD))
 		if i < Shows.PATRON:
-			var favor := r.town_favors[i]
+			var favor := r.town_favors[i] if r.has_part("favors") else ""
 			if favor != "":
 				col.add_child(_wrapped("Skip for: " + UiTheme.name_of(favor), 10, w - 14.0))
 				# Four shows side by side leave room for what a Favor does only on wide screens;
@@ -1183,7 +1291,19 @@ func _middle_show_info() -> void:
 		var row := HBoxContainer.new()
 		row.alignment = BoxContainer.ALIGNMENT_CENTER
 		row.add_theme_constant_override("separation", 8)
-		row.add_child(UiTheme.title("Tap up to %d cards to make a poker hand" % run.stat("max_play"), 10, UiTheme.TEXT))
+		# The best poker hand in these cards, one tap from being picked.
+		var best := _best_hand()
+		if best.is_empty():
+			row.add_child(UiTheme.title("Tap up to %d cards to make a poker hand" % run.stat("max_play"), 10, UiTheme.TEXT))
+		else:
+			var pick := UiTheme.button("Best here: %s" % best["label"], func() -> void:
+				Feel.play("select")
+				selected_hand.assign(best["ids"])
+				refresh(), 10, UiTheme.GOLD.darkened(0.35))
+			pick.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			pick.custom_minimum_size = Vector2(0, 20)
+			row.add_child(pick)
+			_best_button = pick
 		row.add_child(_hands_chart_button())
 		col.add_child(row)
 	else:
@@ -1207,11 +1327,107 @@ func _middle_show_info() -> void:
 			var wins := guess >= need
 			var line := "Scores about %s  -  %s" % [UiTheme.number(guess), ("the Encore lands!" if encore else "enough to win the show!") if wins else "%s short" % UiTheme.number(need - guess)]
 			col.add_child(_centred(UiTheme.title(line, 12, UiTheme.GOOD if wins else UiTheme.TEXT)))
-	if run.tour and not encore:
+	if run.tour and run.has_part("crowd") and not encore:
 		var spacer := Control.new()
 		spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		col.add_child(spacer)
 		col.add_child(_mood_meter(width))
+
+
+## The best poker hand the cards in hand can make, as {type, ids, label}: the highest kind,
+## then the highest scoring cards, with only the cards that score (a Pair is its two cards).
+## It reads the cards alone, not the Jesters. Face-down cards are left out; {} when there's
+## nothing to suggest.
+func _best_hand() -> Dictionary:
+	var cards: Array[PlayingCard] = []
+	for c in run.hand:
+		if not c.face_down and not c.debuffed:
+			cards.append(c)
+	var key := ",".join(cards.map(func(c: PlayingCard) -> String: return "%d:%d:%d:%s" % [c.id, c.rank, c.suit, c.enhancement]))
+	if _best_key == key:
+		return _best_cache
+	_best_key = key
+	_best_cache = {}
+	var most := mini(run.stat("max_play"), cards.size())
+	var options := run.eval_options()
+	var best_kind := -1
+	var best_sum := -1
+	var best: Array[PlayingCard] = []
+	for mask in range(1, 1 << cards.size()):
+		var subset: Array[PlayingCard] = []
+		for i in cards.size():
+			if mask & (1 << i):
+				subset.append(cards[i])
+		if subset.size() > most:
+			continue
+		var result := HandEvaluator.evaluate(subset, options)
+		var kind := HandTable.ORDER.find(result.type)
+		var total := 0
+		for c in result.scoring:
+			total += c.rank
+		if kind > best_kind or (kind == best_kind and (total > best_sum or (total == best_sum and result.scoring.size() < best.size()))):
+			best_kind = kind
+			best_sum = total
+			best = result.scoring.duplicate()
+	if best.is_empty():
+		return _best_cache
+	var ranks := best.map(func(c: PlayingCard) -> String: return RANK_SHORT.get(c.rank, str(c.rank)))
+	_best_cache = {"type": HandTable.ORDER[best_kind], "ids": best.map(func(c: PlayingCard) -> int: return c.id),
+		"label": "%s (%s)" % [_hand_name(HandTable.ORDER[best_kind]), ", ".join(ranks)]}
+	return _best_cache
+
+
+## How the last hand's score added up, line by line (shown in the side panel until the show
+## ends): the hand's base, then each source's Points and Mult in the order they came, then
+## the sum.
+func _receipt_lines(result: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	var order: Array[String] = []
+	var sums := {}
+	var last: Dictionary = {}
+	for e: Dictionary in result.get("events", []):
+		var kind := str(e["t"])
+		if kind == "base":
+			out.append("%s: %s x %s" % [_hand_name(str(e["src"])), UiTheme.number(float(e["points"])), _short(float(e["mult"]))])
+			last = e
+			continue
+		if not kind in ["points", "mult", "xmult"]:
+			continue
+		last = e
+		var label := _source_label(str(e["src"]))
+		if not sums.has(label):
+			sums[label] = {"points": 0.0, "mult": 0.0, "x": 1.0}
+			order.append(label)
+		match kind:
+			"points":
+				sums[label]["points"] += float(e["v"])
+			"mult":
+				sums[label]["mult"] += float(e["v"])
+			"xmult":
+				sums[label]["x"] *= float(e["v"])
+	for label in order:
+		var parts: Array[String] = []
+		if float(sums[label]["points"]) != 0.0:
+			parts.append("+%s Points" % UiTheme.number(float(sums[label]["points"])))
+		if float(sums[label]["mult"]) != 0.0:
+			parts.append("+%s Mult" % _short(float(sums[label]["mult"])))
+		if not is_equal_approx(float(sums[label]["x"]), 1.0):
+			parts.append("x%s Mult" % _short(float(sums[label]["x"])))
+		out.append("%s: %s" % [label, ", ".join(parts)])
+	if not last.is_empty():
+		out.append("= %s x %s = %s" % [UiTheme.number(float(last["points"])), _short(float(last["mult"])), UiTheme.number(float(result.get("total", 0.0)))])
+	return out
+
+
+## A scoring step's source as players know it: the cards, a Jester's name, a card's name.
+func _source_label(src: String) -> String:
+	if src == "card":
+		return "Cards"
+	if src.begins_with("zanni:"):
+		return UiTheme.name_of(src.trim_prefix("zanni:").get_slice("#", 0))
+	if ContentDB.get_def(src) != null:
+		return UiTheme.name_of(src)
+	return src.capitalize()
 
 
 ## A small "Poker hands" button: the chart of every hand, its level and its Points x Mult.
@@ -1731,7 +1947,7 @@ func _build_buttons() -> void:
 				_add_button("Improvise", func() -> void: _act({"a": "select_show"}), false, UiTheme.MULT)
 			else:
 				_add_button("Play " + SHOW_NAMES[r.show_index], func() -> void: _act({"a": "select_show"}), false, UiTheme.MULT, true)
-			if r.show_index < Shows.PATRON:
+			if r.show_index < Shows.PATRON and r.has_part("favors"):
 				_add_button("Skip for the Favor", func() -> void: _act({"a": "skip_show"}))
 			if r.town_swaps < r.stat("patron_swaps"):
 				_add_button("Swap Patron (10)", func() -> void: _act({"a": "swap_patron"}))
@@ -1861,6 +2077,9 @@ func _build_overlay() -> void:
 	shade.color = Color(0, 0, 0, 0.72)
 	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
 	overlay.add_child(shade)
+	if r.practice and just_won:
+		_practice_done_panel()
+		return
 	var accent := UiTheme.MULT if lost else UiTheme.GOLD
 	var panel := PanelContainer.new()
 	panel.add_theme_stylebox_override("panel", UiTheme.panel_box(UiTheme.PANEL, accent.darkened(0.2)))
@@ -1968,6 +2187,34 @@ func _build_overlay() -> void:
 		t.tween_property(panel, "modulate:a", 1.0, 0.18)
 
 
+## The practice town is over: what the player now knows, and on to a first real tour.
+func _practice_done_panel() -> void:
+	Settings.practice_done = true
+	Settings.save()
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", UiTheme.panel_box(UiTheme.PANEL, UiTheme.GOLD.darkened(0.2)))
+	panel.position = Vector2(110, 0)
+	panel.size = Vector2(420, 0)
+	UiTheme.stage(overlay).add_child(panel)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 8)
+	panel.add_child(col)
+	col.add_child(_centred(UiTheme.title("Practice town done!", 22, UiTheme.GOLD)))
+	var words := _wrapped("You know the heart of the game: make poker hands, fill the bar before your hands run out, buy Jesters in the Market, and beat the Patron. A real tour has 8 towns, and every tour you finish adds a new part of the game.", 11, 396)
+	words.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(words)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 8)
+	col.add_child(row)
+	if not Game.has_saved_run():
+		row.add_child(UiTheme.button("Start my first tour", func() -> void:
+			Feel.play("play")
+			_leave_practice(), 13, UiTheme.MULT))
+	row.add_child(UiTheme.button("Main menu", func() -> void: back_to_menu.emit(), 12, UiTheme.POINTS))
+	panel.position.y = maxf(4.0, (UiTheme.STAGE.y - panel.get_combined_minimum_size().y) / 2.0)
+
+
 ## What the run brought the player (batch 13), as [text, colour] lines: scudi, the Jesters'
 ## fame (and any new Maestro), the nemesis, a chapter's first-clear reward. Nothing for a
 ## seeded run.
@@ -2018,6 +2265,9 @@ func _next_up_lines(r: RunState) -> Array:
 	var lost := r.phase == RunState.Phase.LOST
 	if lost and not Game.run_meta.get("gave_up", false) and r.show_score < r.show_target and r.show_score >= r.show_target * 0.6:
 		out.append(["So close: %s more points would have won the %s." % [UiTheme.number(r.show_target - r.show_score), SHOW_NAMES[r.show_index]], UiTheme.GOLD.lightened(0.2)])
+	# The next part of the game, for a player still learning it.
+	if r.learning < Learning.FULL and not Game.run_meta.get("seeded", false):
+		out.append(["Next run adds " + Learning.next_news(r.learning), UiTheme.GOLD])
 	# Something to look forward to tomorrow.
 	var tomorrow := Time.get_date_string_from_unix_time(int(Time.get_unix_time_from_system()) + 86400)
 	out.append(["Tomorrow: a new card on the board, and the daily run with %s." % UiTheme.name_of(str(Online.daily_setup(tomorrow)["deck"])), UiTheme.MUTED])
@@ -2186,6 +2436,8 @@ func _on_play() -> void:
 		message = _sentence(str(result["error"]))
 		refresh()
 		return
+	# The run's opening words have done their job; the receipt takes the panel from here.
+	message = ""
 	busy = true
 	scoring = true
 	skipping = false
@@ -2231,6 +2483,8 @@ func _on_play() -> void:
 	plate.place(Vector2(AREA_X + area_w / 2.0, middle.position.y + GOAL_H + 2.0 + hand_card.y + 4.0))
 	await _wait(0.2 + played.size() * 0.05)
 	lbl_hand.text = _hand_name(str(result["hand"]))
+	_receipt = _receipt_lines(result)
+	_receipt_key = "%d/%d" % [run.town, run.show_index]
 	var events: Array = result["events"]
 	var step := clampf(2.2 / maxf(1.0, events.size()), 0.08, 0.3)
 	for n in events.size():

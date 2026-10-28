@@ -40,6 +40,11 @@ static var card_back := 0
 static var high_contrast := false
 ## Discard on the left of Play, for playing with the left thumb.
 static var left_handed := false
+## A new player's normal runs bring one new part of the game each (Learning); off plays
+## everything from the start.
+static var step_by_step := true
+## Whether the practice town was played or skipped (a new player's first Play opens it).
+static var practice_done := false
 ## Whether How to play has been closed once; the first run opens it until then.
 static var seen_help := false
 ## Whether "Save your progress" has been offered after the first run (it's offered once).
@@ -71,6 +76,8 @@ static func load_saved() -> void:
 			shake = clampi(int(data.get("shake", shake)), 0, SHAKE_NAMES.size() - 1)
 			high_contrast = bool(data.get("high_contrast", high_contrast))
 			left_handed = bool(data.get("left_handed", left_handed))
+			step_by_step = bool(data.get("step_by_step", step_by_step))
+			practice_done = bool(data.get("practice_done", practice_done))
 			size = clampi(int(data.get("size", size)), 0, 2)
 			var old_vibration: Variant = data.get("vibration")
 			vibration_level = clampi(int(data.get("vibration_level", 1 if old_vibration == null or bool(old_vibration) else 0)), 0, 2)
@@ -87,7 +94,7 @@ static func save() -> void:
 			"v": VERSION, "reduce_motion": reduce_motion, "sound": sound, "music": music,
 			"sfx_volume": sfx_volume, "music_volume": music_volume, "quality": quality, "fps": fps,
 			"crt": crt, "speed": speed, "shake": shake, "size": size, "vibration_level": vibration_level,
-			"card_back": card_back, "high_contrast": high_contrast, "left_handed": left_handed,
+			"card_back": card_back, "high_contrast": high_contrast, "left_handed": left_handed, "step_by_step": step_by_step, "practice_done": practice_done,
 			"seen_help": seen_help, "asked_account": asked_account, "tutorial_step": tutorial_step,
 		}))
 

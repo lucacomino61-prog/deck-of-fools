@@ -44,8 +44,13 @@ func _initialize() -> void:
 		var stake := 1 + bot.randi() % stakes
 		var seed_text := "FZ%d-%d" % [bot.seed, n]
 		var extras := _random_extras() if challenge == "" and bot.randf() < 0.6 else {}
-		# One run in five is a Grand Tour.
+		# One run in five is a Grand Tour; some play an early learning level, a few the practice town.
 		var towns := Shows.GRAND_TOWNS if challenge == "" and bot.randf() < 0.2 else Shows.FINAL_TOWN
+		if challenge == "" and towns == Shows.FINAL_TOWN and bot.randf() < 0.3:
+			extras["learning"] = bot.randi() % Learning.FULL
+			if bot.randf() < 0.2:
+				extras["practice"] = true
+				towns = 1
 		print("RUN %d %s %s stake %d %s%s%s%s" % [n, seed_text, deck, stake, challenge, " rich" if rich else "", " grand" if towns != Shows.FINAL_TOWN else "", " " + JSON.stringify(extras) if not extras.is_empty() else ""])
 		var run := RunState.create(seed_text, deck, stake, challenge, [], extras, towns)
 		_check(run, "created")
@@ -308,7 +313,7 @@ func _check(run: RunState, where: String) -> void:
 			_fail(run, "%s: off the map (row %d of %d, city '%s')" % [where, run.route_row, run.route.size(), run.city])
 		if run.phase == RunState.Phase.MAP and run.roads().is_empty():
 			_fail(run, "%s: on the map with no road out" % where)
-		if run.phase == RunState.Phase.CHOOSE_SHOW and run.scenario == "":
+		if run.phase == RunState.Phase.CHOOSE_SHOW and run.scenario == "" and run.has_part("scenarios"):
 			_fail(run, "%s: a show with no Scenario" % where)
 	for z in run.zanni:
 		for part in z.parts:

@@ -449,6 +449,11 @@ func _on_start() -> void:
 		return
 	_confirm_new = false
 	Feel.play("play")
+	# A new player's first Play opens the practice town (it can be skipped from its tips).
+	if mode == "deck" and not Settings.practice_done and Game.profile.runs_played() == 0 and not Game.has_saved_run():
+		Game.start_practice()
+		start.emit()
+		return
 	if _on_decks():
 		Game.new_run(deck_ids[deck_index], stake, "", "", {"grand": true} if mode == "grand" else {})
 	else:

@@ -93,6 +93,9 @@ func _build() -> void:
 			_build(), 11, UiTheme.PANEL_LIGHT)
 		turn.custom_minimum_size = Vector2(96, 0)
 		buttons.add_child(turn)
+	# The practice town again, any time (a saved tour stays saved; it isn't one).
+	if Game.run == null or not Game.run.practice:
+		buttons.add_child(UiTheme.button("Practice town", _practice, 11, UiTheme.GOLD.darkened(0.35)))
 	var ok := UiTheme.button("Got it", _close, 12, UiTheme.MULT)
 	ok.custom_minimum_size = Vector2(120, 0)
 	buttons.add_child(ok)
@@ -102,6 +105,14 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode in [KEY_ESCAPE, KEY_ENTER, KEY_KP_ENTER, KEY_SPACE]:
 		get_viewport().set_input_as_handled()
 		_close()
+
+
+func _practice() -> void:
+	_close()
+	Game.start_practice()
+	var main: Node = UiTheme.sheet_host
+	if main != null and main.has_method("_show_run"):
+		main.wipe.sweep(main._show_run)
 
 
 func _close() -> void:

@@ -22,7 +22,8 @@ static func roll_shop_packs(run: RunState) -> Array[Dictionary]:
 	var defs := ContentDB.pool("pack")
 	if defs.is_empty():
 		return out
-	var banned := {"zanni": run.stat("jesters_banned") > 0, "sign": run.stat("signs_banned") > 0}
+	var banned := {"zanni": run.stat("jesters_banned") > 0, "sign": run.stat("signs_banned") > 0 or not run.has_part("signs"),
+		"tarocchi": not run.has_part("tarocchi"), "omen": not run.has_part("omens")}
 	var lean := {}
 	for contents in ["tarocchi", "sign", "card", "zanni", "omen"]:
 		lean[contents] = run.stat("pack_%s_pct" % contents) / 100.0

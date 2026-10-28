@@ -67,6 +67,11 @@ func new_run(deck_id: String, stake: int, challenge_id := "", seed := "", meta :
 		# Today's card comes along once the player has finished a first run.
 		var card := Profile.card_of_the_day(today()) if profile.runs_played() > 0 else ""
 		extras = profile.extras_for(str(meta.get("chapter", "")), card)
+		# A new player's normal runs bring one new part of the game each (not the campaign or
+		# a Grand Tour, which play the whole game).
+		var level := mini(Learning.FULL, profile.runs_played())
+		if Settings.step_by_step and level < Learning.FULL and not meta.has("chapter") and not bool(meta.get("grand", false)):
+			extras["learning"] = level
 	# A Grand Tour ({grand} in meta) runs 16 towns; daily, seeded and challenge runs never do.
 	var towns := Shows.GRAND_TOWNS if bool(meta.get("grand", false)) and challenge_id == "" else Shows.FINAL_TOWN
 	run = RunState.create(seed if seed != "" else random_seed(), deck, stake, challenge_id, profile.locked_cards(), extras, towns)
@@ -118,7 +123,7 @@ func act(action: Dictionary, quiet := false) -> Dictionary:
 	var result := run.apply(action)
 	if result["ok"]:
 		# A show just ended: its score may be a new best for that show (the goal bar's ghost).
-		if in_show and run.phase != RunState.Phase.IN_SHOW and not run_meta.get("seeded", false):
+		if in_show and run.phase != RunState.Phase.IN_SHOW and not run_meta.get("seeded", false) and not run.practice:
 			profile.note_show(run)
 			_save_json(PROFILE_PATH, profile.to_dict())
 		if run.phase == RunState.Phase.LOST:
@@ -133,6 +138,10 @@ func act(action: Dictionary, quiet := false) -> Dictionary:
 ## Writes the run into the profile once (a loss, or leaving after a win) and clears the save.
 func finish_run() -> void:
 	if run == null or recorded:
+		return
+	# The practice town leaves no trace: no record, and a saved tour stays saved.
+	if run.practice:
+		recorded = true
 		return
 	# A seeded run's cards were known in advance, so only its discoveries count.
 	profile.record_run(run, not run_meta.get("seeded", false), run_meta.get("gave_up", false))
@@ -159,6 +168,9 @@ func give_up() -> void:
 func restart() -> void:
 	if run == null:
 		return
+	if run.practice:
+		start_practice()
+		return
 	var deck := run.deck_id
 	var stake := run.stake
 	var challenge := run.challenge
@@ -172,6 +184,17 @@ func restart() -> void:
 		seed = run.seed_text
 	give_up()
 	new_run(deck, stake, challenge, seed, meta)
+
+
+## The practice town (2026-10-28): one town of four shows at half targets that can't be lost,
+## with only the heart of the game, before a new player's first tour. It isn't saved and leaves
+## no record, so a saved tour is still there after it.
+func start_practice() -> void:
+	run = RunState.create("PRACTICE", "d_bergamo", 1, "", [], {"learning": 0, "practice": true}, 1)
+	run_meta = {"practice": true}
+	recorded = false
+	win_seen = false
+	changed.emit()
 
 
 ## A campaign chapter: its stake, and the deck the player picked.
@@ -200,6 +223,8 @@ func first_run_finished() -> bool:
 
 
 func _save_run() -> void:
+	if run.practice:
+		return
 	_save_json(RUN_PATH, run.to_dict())
 
 

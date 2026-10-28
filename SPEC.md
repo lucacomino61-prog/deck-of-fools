@@ -165,6 +165,21 @@ Every card gets its own name, effect text and pixel art, designed with you in ba
   the leaderboards like any prop), the same for everyone, after the first finished run.
 - No countdowns, no streaks to lose, no pressure to pay.
 
+**Learning the game without knowing Balatro (2026-10-28):**
+- A practice town before a new player's first tour (their first Play opens it; How to play
+  replays it): one town of four shows at half targets that can't be lost, 10 ducats and a
+  Jester in the Market, a tip for each step (make a hand, Points x Mult, the Market, Jesters,
+  Discard, the Patron). It isn't saved and doesn't count as a run.
+- One new part per run (content/learning.gd): the first normal run has poker hands, the four
+  shows and their Patrons, Jesters and playing cards; then Signs, Tarocchi, Favors and
+  Warrants, the Map of Italy, Scenarios and the crowd, Omens and Lazzi, one step per finished
+  run. The run's start says what's new, the end screen what the next run adds. Daily, seeded,
+  challenge, campaign and Grand Tour runs play the whole game; Settings > New player can
+  switch everything on.
+- A best-hand helper ("Best here: Full House (8, 8, 8, Q, Q)", one tap picks it) and a receipt
+  of how the last hand scored in the side panel.
+- The look stays as it is (Luca rejected four alternative styles).
+
 **Performance:** 60fps target on mid-range Android; build size kept small.
 
 ## 5. Accounts and online (Cloudflare Workers + D1)

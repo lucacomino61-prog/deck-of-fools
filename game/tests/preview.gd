@@ -286,12 +286,28 @@ static func open(main: Control, screen: String) -> void:
 		timer.timeout.connect(func() -> void:
 			for node in main.find_children("*", "CardView", true, false):
 				node.set_process(false))
+	# Screens show the whole game; first_run and the practice town set their own level.
+	Settings.step_by_step = false
+	Settings.practice_done = true
 	Settings.seen_help = screen != "help"
 	Settings.tutorial_step = 0 if screen.begins_with("coach") else -1
 	if screen == "menu":
 		return
 	if screen == "title":
 		main._show_title()
+		return
+	if screen == "practice" or screen == "practice_show":
+		# The practice town: its first tip, or its first show with the hand tip.
+		Game.start_practice()
+		if screen == "practice_show":
+			Game.act({"a": "select_show"})
+		main._show_run()
+		return
+	if screen == "first_run":
+		# A new player's first tour: what it has, said at the start.
+		Game.new_run("d_bergamo", 1)
+		Game.run._take_extras({"learning": 0})
+		main._show_run()
 		return
 	if screen == "grand_menu":
 		main._show_menu()
@@ -532,6 +548,10 @@ static func open(main: Control, screen: String) -> void:
 				Game.win_seen = false
 			Game.changed.emit()
 			return
+	if screen == "best":
+		# Nothing picked: the best-hand helper's button.
+		board.refresh()
+		return
 	if screen == "ghost":
 		# A best of 240 at this show: the ghost mark sits just short of the target.
 		Game.profile.show_best[Profile.show_key(run)] = 240.0
@@ -541,6 +561,11 @@ static func open(main: Control, screen: String) -> void:
 		await main.get_tree().create_timer(2.0).timeout
 		_memory_report()
 		_time_pieces(board)
+		return
+	if screen == "receipt":
+		# A hand played at 4x speed: the receipt of how it scored in the side panel.
+		Settings.speed = 4.0
+		board._on_play()
 		return
 	if screen == "scoring":
 		# Long enough for Feel.prepare_audio() to finish, as it would on the menu.

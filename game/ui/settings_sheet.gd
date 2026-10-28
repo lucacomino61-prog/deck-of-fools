@@ -50,6 +50,7 @@ func _build() -> void:
 		Settings.high_contrast = i == 1
 		CardArt.clear()))
 	left.add_child(_choice("Buttons", ["Play first", "Discard first"], 1 if Settings.left_handed else 0, func(i: int) -> void: Settings.left_handed = i == 1))
+	left.add_child(_choice("New player", ["One new part per run", "Everything now"], 0 if Settings.step_by_step else 1, func(i: int) -> void: Settings.step_by_step = i == 0))
 
 	right.add_child(_heading("Play"))
 	right.add_child(_choice("Game speed", Settings.SPEEDS.map(func(s: float) -> String: return Settings.speed_name(s)), Settings.SPEEDS.find(Settings.speed), func(i: int) -> void: Settings.speed = Settings.SPEEDS[i]))

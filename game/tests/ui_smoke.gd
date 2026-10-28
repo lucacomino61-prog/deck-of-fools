@@ -9,6 +9,10 @@ extends Node
 
 func _ready() -> void:
 	seed(7)
+	# The whole game, whatever this machine's profile has played (the practice town is tested
+	# on its own).
+	Settings.step_by_step = false
+	Settings.practice_done = true
 	get_tree().create_timer(90.0).timeout.connect(func() -> void:
 		push_error("UI SMOKE FAILED: timed out")
 		get_tree().quit(1))
@@ -85,9 +89,32 @@ func _ready() -> void:
 	await _pause_menu(board)
 	await _progression(board)
 	Game.new_run("d_bergamo", 1)
+	await _practice(board)
 	_check(Game.continue_run(), "a saved run continues")
 	print("UI SMOKE OK")
 	get_tree().quit()
+
+
+## The practice town: its tips, the best-hand button picking a hand, the receipt after it, and
+## the saved tour still there afterwards (the practice isn't saved).
+func _practice(board: RunScreen) -> void:
+	Game.start_practice()
+	var run := Game.run
+	board._practice_seen.clear()
+	board.refresh()
+	_check(_has_text(board.coach, "practice town"), "the practice town's first tip")
+	_step(board, {"a": "select_show"})
+	_check(_has_text(board.coach, "poker hand"), "the tip about making a poker hand")
+	var best := board._best_hand()
+	_check(not best.is_empty() and _press_button(board.middle, "Best here: " + str(best["label"])), "the best-hand button")
+	_check(board.selected_hand.size() == (best["ids"] as Array).size(), "it picked that hand")
+	board._on_play()
+	while board.busy:
+		await get_tree().create_timer(0.05).timeout
+	board.refresh()
+	_check(board.info_name.text.begins_with("How your last hand scored") or run.phase != RunState.Phase.IN_SHOW, "the receipt in the side panel")
+	_check(board._receipt.size() >= 2 and board._receipt[-1].begins_with("="), "the receipt ends with the sum")
+	_check(not FileAccess.file_exists(Game.RUN_PATH) or not RunState.from_dict(JSON.parse_string(FileAccess.get_file_as_string(Game.RUN_PATH))).practice, "the practice isn't saved over the tour")
 
 
 ## Cards and keys: number keys pick cards, the preview names a score, S sorts, a tap

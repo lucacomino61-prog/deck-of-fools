@@ -298,6 +298,13 @@ var rematch: Dictionary = {}
 var fame: Dictionary = {}
 ## Scenario swaps used in this town (Il Suggeritore).
 var town_scenario_swaps := 0
+## How much of the game this run has (Learning: one new part per run for a new player).
+var learning := Learning.FULL
+## The practice town (2026-10-28): one town before a new player's first tour, half targets,
+## and a show that runs out of hands still counts as won.
+var practice := false
+const PRACTICE_TARGET := 0.5
+const PRACTICE_DUCATS := 10
 
 
 ## A new run. `challenge_id` sets up a challenge run; `locked_ids` are the cards the
@@ -316,7 +323,7 @@ static func create(seed_value: String, deck := "standard", stake_level := 1, cha
 	run._take_extras(run_extras)
 	run._build_deck()
 	run._plan_route()
-	run.ducats = run.stat("start_ducats")
+	run.ducats = run.stat("start_ducats") if not run.practice else PRACTICE_DUCATS
 	run.fire_all("run_start", run)
 	run._join_carried()
 	run._start_town()
@@ -681,6 +688,8 @@ func target_for_show(index: int) -> float:
 		if is_rematch():
 			factor *= REMATCH_TARGET
 	factor *= stat("target_pct") / 100.0
+	if practice:
+		factor *= PRACTICE_TARGET
 	return floorf(Shows.base_target(town, stat("target_scaling"), towns) * factor)
 
 
@@ -889,6 +898,8 @@ func _skip_show() -> Dictionary:
 		return _fail("not choosing a show")
 	if show_index >= Shows.PATRON:
 		return _fail("the patron's show can't be skipped")
+	if not has_part("favors"):
+		return _fail("skipping shows comes in a later run")
 	var favor := town_favors[show_index]
 	var note := town_favor_notes[show_index]
 	_count("skips")
@@ -948,7 +959,7 @@ func _play(ids: Array) -> Dictionary:
 	for id in _fired_in(ctx.events):
 		_mark_fired_id(id)
 	fire_all("hand_played", self, [played])
-	if tour:
+	if tour and has_part("crowd"):
 		_crowd_reacts(ctx)
 	if show_score >= show_target:
 		_win_show()
@@ -1022,6 +1033,11 @@ func hand_allowed(ctx: ScoreContext) -> bool:
 ## The show is lost unless a Jester's "rescue" hook saves it (that Jester is used up);
 ## a rescued show passes without its show reward.
 func _lose_or_rescue() -> void:
+	# The practice town can't be lost: the show passes anyway.
+	if practice:
+		_count("practice_passes")
+		_win_show()
+		return
 	for item in zanni:
 		if item.debuffed:
 			continue
@@ -1436,6 +1452,8 @@ func _start_town() -> void:
 				var hands: Array = HandTable.ORDER.filter(func(h: String) -> bool: return hand_levels.is_visible(h))
 				town_favor_notes[i] = hands[rng("favor").below(hands.size())]
 	town_warrant = _roll_warrant()
+	if not has_part("warrants"):
+		town_warrant = ""
 	warrant_bought = false
 	town_swaps = 0
 	town_played = {}
@@ -1456,7 +1474,7 @@ func _plan_route() -> void:
 	if chapter_def != null:
 		home = str(chapter_def.data["start"])
 		goal = str(chapter_def.data["city"])
-	if home == "":
+	if home == "" or not has_part("map") or practice:
 		return
 	tour = true
 	route = RouteMap.plan(self, home, goal, towns)
@@ -1588,6 +1606,13 @@ func _take_extras(run_extras: Dictionary) -> void:
 		if ContentDB.get_def(str(id)) != null:
 			props.append(str(id))
 	chapter = str(extras.get("chapter", ""))
+	learning = clampi(int(extras.get("learning", Learning.FULL)), 0, Learning.FULL)
+	practice = bool(extras.get("practice", false))
+
+
+## Whether this run has part of the game yet (Learning.PARTS).
+func has_part(part: String) -> bool:
+	return Learning.has(learning, part)
 
 
 ## The Jester carried in from the last campaign chapter joins first (a duo with its parts).
@@ -1682,7 +1707,7 @@ func roads() -> Array:
 ## The next show's Scenario, drawn from the tier for this town.
 func _roll_scenario() -> void:
 	scenario = ""
-	if tour:
+	if tour and has_part("scenarios"):
 		scenario = ScenarioCards.pick(self, rng("scenario"))
 
 
@@ -1766,6 +1791,8 @@ func _encore_play(ids: Array) -> Dictionary:
 func _merge(a: int, b: int) -> Dictionary:
 	if phase != Phase.SHOP:
 		return _fail("merge in the shop")
+	if not has_part("lazzi"):
+		return _fail("Lazzi come in a later run")
 	if a < 0 or b < 0 or a >= zanni.size() or b >= zanni.size() or a == b:
 		return _fail("pick two of your Jesters")
 	var duo_id := LazziCards.duo_of(zanni[a].def_id, zanni[b].def_id)
@@ -1840,7 +1867,7 @@ func _win_show(rescued := false) -> void:
 			_add_fame(troupe_ids(), Fame.NEMESIS)
 	if town == towns and show_index == Shows.PATRON:
 		_add_fame(troupe_ids(), Fame.RUN_WON)
-	if tour and not rescued and mood >= ENCORE_MOOD:
+	if tour and has_part("crowd") and not rescued and mood >= ENCORE_MOOD:
 		phase = Phase.ENCORE
 		show_counters["encore"] = "offered"
 
@@ -1951,6 +1978,11 @@ func _fill_shop() -> void:
 		var offer := _roll_offer()
 		if not offer.is_empty():
 			shop.offers.append(offer)
+	# The practice town's Market always has a Jester to try.
+	if practice and not shop.offers.is_empty() and not shop.offers.any(func(o: Dictionary) -> bool: return o["kind"] == "zanni"):
+		var jester := _roll_offer("zanni")
+		if not jester.is_empty():
+			shop.offers[0] = jester
 
 
 ## One shop offer of a random kind, or of `force_kind` (a prop's extra Jester).
@@ -1959,13 +1991,15 @@ func _roll_offer(force_kind := "") -> Dictionary:
 	var kinds: Array[String] = []
 	var weights := []
 	for kind: String in SHOP_KIND_WEIGHTS:
+		if (kind == "sign" and not has_part("signs")) or (kind == "tarocchi" and not has_part("tarocchi")):
+			continue
 		if not _shop_pool(kind).is_empty():
 			kinds.append(kind)
 			weights.append(_kind_weight(kind))
 	if stat("card_rate") > 0:
 		kinds.append("card")
 		weights.append(stat("card_rate"))
-	if stat("omen_rate") > 0 and not _shop_pool("omen").is_empty():
+	if stat("omen_rate") > 0 and has_part("omens") and not _shop_pool("omen").is_empty():
 		kinds.append("omen")
 		weights.append(stat("omen_rate"))
 	var kind := force_kind

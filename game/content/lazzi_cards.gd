@@ -54,6 +54,8 @@ static func duo_of(a: String, b: String) -> String:
 ## Every duo one of your Jesters could make with another one you own: [{duo, index, other}].
 static func merges_for(run: RunState, index: int) -> Array:
 	var out := []
+	if not run.has_part("lazzi"):
+		return out
 	if index < 0 or index >= run.zanni.size() or not run.zanni[index].parts.is_empty():
 		return out
 	for j in run.zanni.size():
