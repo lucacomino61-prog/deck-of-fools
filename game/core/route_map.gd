@@ -1,9 +1,9 @@
 class_name RouteMap
 extends RefCounted
-## The Map of Italy (batch 12): a run's route, one row per town. Row 1 is the deck's home,
-## rows 2–7 hold three cities each along a loop across the real map (out from home towards
-## the far side of Italy, then back up to Venezia), and row 8 is always Venezia for
-## Carnevale. Each city has roads to the one or two nearest
+## The Map of Italy (batch 12): a run's route, one row per town. Row 1 is the deck's home
+## (Palermo on a Grand Tour), the middle rows hold three cities each along a loop across the
+## real map (out from home towards the far side of Italy, then back up to Venezia), and the
+## last row (8, or 16 on a Grand Tour) is always Venezia for Carnevale. Each city has roads to the one or two nearest
 ## cities of the next row, and every city can be reached. Endless play adds rows drawn from
 ## all 24 cities. Everything comes from the run's "route" stream, so a seed always draws the
 ## same map.
@@ -16,11 +16,17 @@ const SPREAD := 1.2
 const NEAREST := 5
 ## The middle of mainland Italy (longitude, latitude).
 const CENTRE := Vector2(12.6, 42.4)
+## A Grand Tour's way up Italy between Palermo and Venezia: Sicily's east, Naples, Rome,
+## Tuscany, Liguria, Piedmont, Lombardy, the Veneto. Its towns are spread evenly along it.
+const GRAND_WAY := [Vector2(15.3, 38.6), Vector2(14.6, 41.0), Vector2(12.5, 41.9), Vector2(11.3, 43.5),
+	Vector2(9.6, 44.0), Vector2(7.8, 45.0), Vector2(9.5, 45.6), Vector2(10.9, 45.3)]
 
 
 ## The route from `home` to `last` (Venezia, or a campaign chapter's city; it can be home
-## again, a loop).
-static func plan(run: RunState, home: String, last := CityCards.VENEZIA) -> Array:
+## again, a loop), `rows` towns long. A Grand Tour's 16 rows are more than Italy has cities,
+## so its rows may come back to a city, just not the row before's; it climbs the west coast
+## from Palermo, then crosses the north to Venezia.
+static func plan(run: RunState, home: String, last := CityCards.VENEZIA, rows := ROWS) -> Array:
 	var r := run.rng("route")
 	var used := {home: true, last: true}
 	var start := _pos(home)
@@ -28,14 +34,23 @@ static func plan(run: RunState, home: String, last := CityCards.VENEZIA) -> Arra
 	# The loop bends round a point on the far side of Italy from home.
 	var turn := CENTRE + (CENTRE - start) * 0.9
 	turn = Vector2(clampf(turn.x, 8.0, 17.0), clampf(turn.y, 38.5, 46.0))
+	var way: Array = [start]
+	way.append_array(GRAND_WAY)
+	way.append(goal)
 	var route: Array = [[{"city": home, "to": []}]]
-	for row in range(1, ROWS - 1):
-		var t := float(row) / float(ROWS - 1)
+	for row in range(1, rows - 1):
+		var t := float(row) / float(rows - 1)
 		var on_loop := start * (1.0 - t) * (1.0 - t) + turn * 2.0 * (1.0 - t) * t + goal * t * t
+		if rows > ROWS:
+			on_loop = _along(way, t)
 		var aim := on_loop + Vector2((r.next_float() - 0.5) * 2.0 * SPREAD, (r.next_float() - 0.5) * 2.0 * SPREAD)
+		if rows > ROWS:
+			used = {home: true, last: true}
+			for node in route[row - 1]:
+				used[node["city"]] = true
 		route.append(_row_near(r, aim, used))
 	route.append([{"city": last, "to": []}])
-	for row in range(0, ROWS - 1):
+	for row in range(0, rows - 1):
 		_connect(r, route[row], route[row + 1])
 	return route
 
@@ -89,6 +104,22 @@ static func _connect(r: ZRng, from_row: Array, to_row: Array) -> void:
 					nearest = n
 			(nearest["to"] as Array).append(j)
 			(nearest["to"] as Array).sort()
+
+
+## The point `t` (0 to 1) of the way along a line through `points`, by distance.
+static func _along(points: Array, t: float) -> Vector2:
+	var total := 0.0
+	for i in range(1, points.size()):
+		total += (points[i] as Vector2).distance_to(points[i - 1])
+	var left := t * total
+	for i in range(1, points.size()):
+		var a: Vector2 = points[i - 1]
+		var b: Vector2 = points[i]
+		var d := a.distance_to(b)
+		if left <= d or i == points.size() - 1:
+			return a.lerp(b, clampf(left / maxf(d, 0.0001), 0.0, 1.0))
+		left -= d
+	return points[points.size() - 1]
 
 
 ## A city's place as (longitude, latitude).

@@ -40,7 +40,7 @@ harlequin-diamond backdrop (not Balatro's paint swirl).
 |---|---|---|
 | Joker | **Jesters** (the commedia masks: Arlecchino, Pulcinella…) | The cards you collect are the troupe; "Jester" is a word every player knows |
 | Ante (8 per run) | **Town** (8 towns per tour) | The troupe tours |
-| Small / Big / Boss blind | **Matinee / Evening show / Patron** | The boss is a noble patron with a whim (debuff) |
+| Small / Big / Boss blind | **Matinee / Evening show / Gala / Patron** | The boss is a noble patron with a whim (debuff); the Gala (2026-10-28) is a fourth show the genre doesn't have |
 | Chips × Mult | **Points × Mult** | Avoids casino words |
 | $ | **Ducats** | Avoids casino imagery; period-correct |
 | Planet cards (level a hand) | **Signs**: 12 zodiac signs, one per poker hand | 12 hands = 12 signs (renamed from "Stars" in batch 2 to avoid clashing with La Stella) |
@@ -55,8 +55,11 @@ no chip stacks, no slot-machine reels, no loot boxes, no real-money prizes.
 
 ## 3. Gameplay (same rules as the genre)
 
-**Run:** 8 towns. Each town has a matinee, an evening show and a patron. Beat all 8 patrons
-to win; endless mode continues after that.
+**Run:** 8 towns. Each town has a matinee, an evening show, a Gala and a patron (the Gala was
+added 2026-10-28 to make runs longer). Beat all 8 patrons to win; endless mode continues after
+that. The **Grand Tour** (a menu tab) runs 16 towns from Palermo to Venezia, two to three hours;
+its targets climb the same curve more slowly, ending as hard as town 10 of a normal tour, and
+it stays off the leaderboards. A won normal run takes about 1 to 1.5 hours.
 
 **Each show:** 52-card deck, 8 cards in hand, **4 hands and 3 discards**. Play 1 to 5 cards.
 **Score = (hand points + card points + bonuses) × (hand mult + bonuses) × each ×Mult.**
@@ -66,16 +69,18 @@ Card points: 2–10 = face value, J/Q/K = 10, A = 11.
 Starting values sit in the same range as the genre (Pair 10 × 2 up to Flush Five 160 × 16)
 and are confirmed in batch 1.
 
-**Score targets:** base per town 300 · 800 · 2,000 · 5,000 · 11,000 · 20,000 · 35,000 ·
-50,000. Matinee ×1, evening ×1.5, patron ×2 (some patrons change this). Stakes raise the curve.
+**Score targets:** base per town 400 · 1,100 · 2,600 · 5,000 · 11,000 · 20,000 · 35,000 ·
+50,000 (towns 1-3 raised from 300 · 800 · 2,000 on 2026-10-28, so early shows take real
+hands). Matinee ×1, evening ×1.5, Gala ×1.75, patron ×2 (some patrons change this). Stakes
+raise the curve.
 
 **Jester order:** they trigger left to right. +Mult before ×Mult is the core skill.
 
 **Economy:**
 - Start with 4 ducats.
-- Show rewards: 3 / 4 / 5 ducats, +1 per unused hand.
+- Show rewards: 3 / 4 / 4 / 5 ducats (Matinee, Evening, Gala, Patron), +1 per unused hand.
 - Interest: 1 ducat per 5 held, up to 5.
-- You can skip a matinee or an evening show to take a Favor.
+- You can skip a matinee, an evening show or a Gala to take a Favor.
 
 **Shop after each show:**
 - 2 card slots.
@@ -268,6 +273,11 @@ Jester carried, rematch 1 in 5, lists kept).
 | 4 Social | **Weekly tour** | A weekly seeded tour with a random special rule and its own leaderboard |
 | 4 Social | **Friend duel** | Both: challenge links (play my seed) and live duels by room code |
 | 4 Social | **Ghost troupes** | In the daily run, see other players' troupes from the same town |
+
+**More gameplay (picked 2026-10-22, cards/batch-14.md, proposed, not coded):** crowd
+requests, Crescendo, bets before a show, the Patron's second act, road events on the map,
+masks for Jesters, rival troupe shows, haggling in the Market, plus group 3's Jester voices
+and hecklers. The Critic's review waits.
 
 **Change to §3:** Maestro fame and wagon perks are permanent power, which §3 "Rewards and
 progression" ruled out. Luca decided (2026-10-22): they're on in normal runs and the

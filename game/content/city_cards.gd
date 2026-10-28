@@ -10,7 +10,7 @@ const VENEZIA := "c_venezia"
 
 static func register() -> void:
 	_add("c_bergamo", 9.67, 45.70, "d_bergamo", _stats({"hands": 1}, {"zanni_rate_pct": 150}))
-	_add("c_milano", 9.19, 45.46, "", _stats({"reward_matinee": 3, "reward_evening": 3, "reward_patron": 3, "pack_discount": 1}, {}, {"target_pct": 1.25}))
+	_add("c_milano", 9.19, 45.46, "", _stats({"reward_matinee": 3, "reward_evening": 3, "reward_gala": 3, "reward_patron": 3, "pack_discount": 1}, {}, {"target_pct": 1.25}))
 	_add("c_torino", 7.69, 45.07, "", _stats({}, {"tarocchi_rate_pct": 200}, {"reward_patron": 2.0}))
 	_add("c_genova", 8.93, 44.41, "d_genova", _stats({"pack_discount": 1}, {}, {"sell_pct": 2.0}))
 

@@ -173,8 +173,8 @@ func test_copista_once_per_show() -> void:
 func test_buttafuori_mutes_the_patron() -> void:
 	var run := _run(["z_buttafuori"])
 	pin_town(run)
-	run.apply({"a": "skip_show"})
-	run.apply({"a": "skip_show"})
+	for i in Shows.PATRON:
+		run.apply({"a": "skip_show"})
 	run.apply({"a": "select_show"})
 	ok(run.full_deck.any(func(c: PlayingCard) -> bool: return c.debuffed), "the patron debuffed hearts")
 	run.apply({"a": "sell", "zone": "zanni", "index": 0})

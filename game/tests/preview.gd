@@ -293,6 +293,25 @@ static func open(main: Control, screen: String) -> void:
 	if screen == "title":
 		main._show_title()
 		return
+	if screen == "grand_menu":
+		main._show_menu()
+		var menu: Node = main.screens.get_children().back()
+		menu.mode = "grand"
+		menu._build()
+		return
+	if screen == "grand_map":
+		# A Grand Tour halfway: the map from Palermo, the troupe in town 6.
+		Game.new_run("d_bergamo", 1, "", "PREVIEW", {"grand": true})
+		var long_run := Game.run
+		for i in 5:
+			long_run.town += 1
+			long_run.route_row += 1
+			long_run.path.append(0)
+			long_run.route_col = 0
+			long_run.city = str(long_run.route[long_run.route_row][0]["city"])
+		long_run.phase = RunState.Phase.MAP
+		main._show_run()
+		return
 	if screen == "board":
 		# The station board for a returning player: a gift, today's card, a nemesis, fame, a
 		# record and the diary.

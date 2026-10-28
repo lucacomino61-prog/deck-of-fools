@@ -56,7 +56,7 @@ func peek_saved_run() -> RunState:
 
 
 ## A new run; the daily run passes its seed and {daily_date, practice}, a seeded run its
-## seed and {seeded}, a campaign chapter {chapter}. Maestri, props and the nemesis come
+## seed and {seeded}, a campaign chapter {chapter}, a Grand Tour {grand}. Maestri, props and the nemesis come
 ## along only in normal runs and the campaign (fair play: batch 13).
 func new_run(deck_id: String, stake: int, challenge_id := "", seed := "", meta := {}) -> void:
 	var deck := deck_id
@@ -67,7 +67,9 @@ func new_run(deck_id: String, stake: int, challenge_id := "", seed := "", meta :
 		# Today's card comes along once the player has finished a first run.
 		var card := Profile.card_of_the_day(today()) if profile.runs_played() > 0 else ""
 		extras = profile.extras_for(str(meta.get("chapter", "")), card)
-	run = RunState.create(seed if seed != "" else random_seed(), deck, stake, challenge_id, profile.locked_cards(), extras)
+	# A Grand Tour ({grand} in meta) runs 16 towns; daily, seeded and challenge runs never do.
+	var towns := Shows.GRAND_TOWNS if bool(meta.get("grand", false)) and challenge_id == "" else Shows.FINAL_TOWN
+	run = RunState.create(seed if seed != "" else random_seed(), deck, stake, challenge_id, profile.locked_cards(), extras, towns)
 	run_meta = meta.duplicate()
 	recorded = false
 	win_seen = false

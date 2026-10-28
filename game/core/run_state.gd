@@ -57,7 +57,8 @@ const REMATCH_TARGET := 1.25
 const REMATCH_REWARD := 2
 const NEMESIS_DUCATS := 10
 
-const SAVE_VERSION := 3
+## 4: the Gala made the Patron the fourth show (2026-10-28); older saves are moved along.
+const SAVE_VERSION := 4
 
 const BASE_STATS := {
 	"hands": 4,
@@ -69,6 +70,7 @@ const BASE_STATS := {
 	"start_ducats": 4,
 	"reward_matinee": 3,
 	"reward_evening": 4,
+	"reward_gala": 4,
 	"reward_patron": 5,
 	"hand_reward": 1,
 	"interest_per": 5,
@@ -183,7 +185,7 @@ const BASE_STATS := {
 ## Growth hooks (buy, sell, skip…) and stat changes are never copied.
 const COPYABLE := ["independent", "card_scored", "card_held", "retrigger_scored", "retrigger_held", "payout"]
 
-const REWARD_STATS := ["reward_matinee", "reward_evening", "reward_patron"]
+const REWARD_STATS := ["reward_matinee", "reward_evening", "reward_gala", "reward_patron"]
 
 ## What a shop card slot holds, and how rare a zanni is (common, uncommon, rare).
 ## Legendary zanni never appear in the shop. Playing cards ("card") come from card_rate.
@@ -211,7 +213,7 @@ var consumables: Array[ItemCard] = []
 var warrants: Array[String] = []
 var favors: Array[String] = []
 var town_patron := ""
-var town_favors: Array[String] = ["", ""]
+var town_favors: Array[String] = ["", "", ""]
 ## This town's Warrant on sale ("" when none is left to offer), and whether it was bought.
 var town_warrant := ""
 var warrant_bought := false
@@ -224,7 +226,7 @@ var pack_queue: Array[String] = []
 ## Permanent changes to stats from one-off effects (e.g. an Omen's "−1 card in hand").
 var stat_mods: Dictionary = {}
 ## What each of this town's Favors names when offered (e.g. L'Oroscopo's hand); "" if nothing.
-var town_favor_notes: Array[String] = ["", ""]
+var town_favor_notes: Array[String] = ["", "", ""]
 ## Ids of cards played so far this town (Il Siniscalco remembers them).
 var town_played: Dictionary = {}
 ## The note of the Favor being taken, only while its "gain" hook runs.
@@ -257,6 +259,8 @@ var feats: Dictionary = {}
 
 ## The tour (batch 12). On when the deck has a home city.
 var tour := false
+## How many towns the tour has before it's won: 8, or 16 on a Grand Tour (2026-10-28).
+var towns := Shows.FINAL_TOWN
 ## The Map of Italy: one row per town, each a list of {city, to: [columns in the next row]}.
 var route: Array = []
 ## Where the troupe is: its row on the route and column in it, the city, and the option
@@ -300,9 +304,10 @@ var town_scenario_swaps := 0
 ## player's profile hasn't unlocked yet, which never turn up in this run; `run_extras` is
 ## what the profile brings (batch 13; Profile.extras_for).
 static func create(seed_value: String, deck := "standard", stake_level := 1, challenge_id := "",
-		locked_ids: Array = [], run_extras := {}) -> RunState:
+		locked_ids: Array = [], run_extras := {}, tour_towns := Shows.FINAL_TOWN) -> RunState:
 	var run := RunState.new()
 	run.seed_text = seed_value
+	run.towns = tour_towns
 	run.deck_id = deck
 	run.stake = stake_level
 	run.challenge = challenge_id
@@ -321,8 +326,8 @@ static func create(seed_value: String, deck := "standard", stake_level := 1, cha
 
 ## A fresh run with every logged action applied again.
 static func replay(seed_value: String, deck: String, stake_level: int, actions: Array,
-		challenge_id := "", locked_ids: Array = [], run_extras := {}) -> RunState:
-	var run := create(seed_value, deck, stake_level, challenge_id, locked_ids, run_extras)
+		challenge_id := "", locked_ids: Array = [], run_extras := {}, tour_towns := Shows.FINAL_TOWN) -> RunState:
+	var run := create(seed_value, deck, stake_level, challenge_id, locked_ids, run_extras, tour_towns)
 	for action in actions:
 		var result := run.apply(action)
 		if not result["ok"]:
@@ -676,7 +681,7 @@ func target_for_show(index: int) -> float:
 		if is_rematch():
 			factor *= REMATCH_TARGET
 	factor *= stat("target_pct") / 100.0
-	return floorf(Shows.base_target(town, stat("target_scaling")) * factor)
+	return floorf(Shows.base_target(town, stat("target_scaling"), towns) * factor)
 
 
 ## The Patron whose whim rules the current show: the town's on its third show, or the one
@@ -866,8 +871,10 @@ func _select_show(perform := false) -> Dictionary:
 		if not pool.is_empty():
 			show_counters["patron"] = pool[rng("patron").below(pool.size())].id
 	show_target = target_for_show(show_index)
-	hands_left = stat("hands")
-	discards_left = stat("discards")
+	# Penalties can stack past zero (a stake, a city, an Omen...): a show still gets a hand,
+	# and never fewer than no discards.
+	hands_left = maxi(1, stat("hands"))
+	discards_left = maxi(0, stat("discards"))
 	draw_pile = full_deck.duplicate()
 	hand.clear()
 	discard_pile.clear()
@@ -1419,10 +1426,10 @@ func _start_town() -> void:
 		town_patron = waiting
 	town_scenario_swaps = 0
 	var favor_pool := ContentDB.pool("favor")
-	town_favors = ["", ""]
-	town_favor_notes = ["", ""]
+	town_favors = ["", "", ""]
+	town_favor_notes = ["", "", ""]
 	if not favor_pool.is_empty():
-		for i in 2:
+		for i in Shows.PATRON:
 			var favor: ContentDef = favor_pool[rng("favor").below(favor_pool.size())]
 			town_favors[i] = favor.id
 			if bool(favor.data.get("names_hand", false)):
@@ -1442,6 +1449,9 @@ func _start_town() -> void:
 func _plan_route() -> void:
 	var home := CityCards.home_of(deck_id, self)
 	var goal := CityCards.VENEZIA
+	# A Grand Tour sets out from Palermo, whatever the deck's home.
+	if towns > Shows.FINAL_TOWN and home != "":
+		home = Shows.GRAND_START
 	var chapter_def := ContentDB.get_def(chapter)
 	if chapter_def != null:
 		home = str(chapter_def.data["start"])
@@ -1449,7 +1459,7 @@ func _plan_route() -> void:
 	if home == "":
 		return
 	tour = true
-	route = RouteMap.plan(self, home, goal)
+	route = RouteMap.plan(self, home, goal, towns)
 	route_row = 0
 	route_col = 0
 	path.assign([0])
@@ -1602,9 +1612,11 @@ func _join_carried() -> void:
 
 
 ## Whether the profile brought anything that changes play (Maestri in use, props, a
-## campaign chapter or a carried Jester): such runs stay off the leaderboards.
+## campaign chapter or a carried Jester), or the run is a Grand Tour: such runs stay off the
+## leaderboards.
 func assisted() -> bool:
-	return not maestri.is_empty() or not props.is_empty() or chapter != "" or not (extras.get("carry", {}) as Dictionary).is_empty()
+	return not maestri.is_empty() or not props.is_empty() or chapter != "" or not (extras.get("carry", {}) as Dictionary).is_empty() \
+		or towns != Shows.FINAL_TOWN
 
 
 ## The def ids of every Jester in the troupe, a duo counted as its two Jesters.
@@ -1800,7 +1812,7 @@ func _advance_show() -> void:
 
 func _win_show(rescued := false) -> void:
 	phase = Phase.CASH_OUT
-	if town == Shows.FINAL_TOWN and show_index == Shows.PATRON:
+	if town == towns and show_index == Shows.PATRON:
 		won = true
 	_count("shows_won")
 	_count("discards_unused", discards_left)
@@ -1826,7 +1838,7 @@ func _win_show(rescued := false) -> void:
 			_count("nemesis_beaten")
 			feats["vendetta"] = true
 			_add_fame(troupe_ids(), Fame.NEMESIS)
-	if town == Shows.FINAL_TOWN and show_index == Shows.PATRON:
+	if town == towns and show_index == Shows.PATRON:
 		_add_fame(troupe_ids(), Fame.RUN_WON)
 	if tour and not rescued and mood >= ENCORE_MOOD:
 		phase = Phase.ENCORE
@@ -2146,7 +2158,7 @@ func to_dict(for_save := true) -> Dictionary:
 		"counters": counters.duplicate(true), "show_counters": show_counters.duplicate(true),
 		"rng": rng_states, "next_id": _next_card_id,
 		"log": action_log.duplicate(true) if for_save else [],
-		"tour": tour, "route": route.duplicate(true), "route_row": route_row, "route_col": route_col, "path": path.duplicate(), "city": city,
+		"tour": tour, "towns": towns, "route": route.duplicate(true), "route_row": route_row, "route_col": route_col, "path": path.duplicate(), "city": city,
 		"town_option": town_option, "scenario": scenario, "scenario_on": scenario_on,
 		"scenario_beat": scenario_beat, "mood": mood, "ovation": ovation,
 		"extras": extras.duplicate(true), "beaten": beaten.duplicate(), "rematch": rematch.duplicate(),
@@ -2186,7 +2198,10 @@ static func from_dict(d: Dictionary) -> RunState:
 	for f in d["favors"]:
 		run.favors.append(str(f))
 	run.town_patron = str(d["patron"])
-	run.town_favors = [str(d["town_favors"][0]), str(d["town_favors"][1])]
+	var favors_saved: Array = d["town_favors"]
+	run.town_favors = ["", "", ""]
+	for i in mini(favors_saved.size(), 3):
+		run.town_favors[i] = str(favors_saved[i])
 	run.town_warrant = str(d.get("warrant", ""))
 	run.warrant_bought = bool(d.get("warrant_bought", false))
 	run.town_swaps = int(d.get("swaps", 0))
@@ -2195,8 +2210,10 @@ static func from_dict(d: Dictionary) -> RunState:
 		run.pack_queue.append(str(queued))
 	for key in d.get("stat_mods", {}):
 		run.stat_mods[str(key)] = int(d["stat_mods"][key])
-	var notes: Array = d.get("favor_notes", ["", ""])
-	run.town_favor_notes = [str(notes[0]), str(notes[1])]
+	var notes: Array = d.get("favor_notes", [])
+	run.town_favor_notes = ["", "", ""]
+	for i in mini(notes.size(), 3):
+		run.town_favor_notes[i] = str(notes[i])
 	for cid in d.get("town_played", []):
 		run.town_played[int(cid)] = true
 	run.challenge = str(d.get("challenge", ""))
@@ -2222,6 +2239,10 @@ static func from_dict(d: Dictionary) -> RunState:
 		run.action_log.append(_normalize(a))
 	# Saves from before the tour (version 1) have none of these and play the classic rules.
 	run.tour = bool(d.get("tour", false))
+	run.towns = int(d.get("towns", Shows.FINAL_TOWN))
+	# Before the Gala (version 3 and older) the Patron was the third show.
+	if int(d.get("v", 1)) < 4 and run.show_index == 2:
+		run.show_index = Shows.PATRON
 	for row in d.get("route", []):
 		var nodes: Array = []
 		for node in row:

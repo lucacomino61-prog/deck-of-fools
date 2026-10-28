@@ -152,10 +152,10 @@ func test_gabelliere_and_avaro() -> void:
 func test_target_patrons() -> void:
 	var run := _run()
 	_patron_show(run, "pt_fortezza")
-	eq(run.show_target, 1200, "Fortezza: x4")
+	eq(run.show_target, 1600, "Fortezza: x4")
 	var countess := _run()
 	_patron_show(countess, "pt_contessa")
-	eq([countess.show_target, countess.hands_left], [300.0, 1], "Contessa: x1, one hand")
+	eq([countess.show_target, countess.hands_left], [400.0, 1], "Contessa: x1, one hand")
 	var duke := _run()
 	duke.town = 8
 	_patron_show(duke, "pt_granduca")
@@ -335,7 +335,7 @@ func test_lasciapassare_swaps_the_patron() -> void:
 
 func test_free_pack_favor_from_a_skip() -> void:
 	var run := _run()
-	run.town_favors.assign(["f_mazzo_incantato", "favor_cash"])
+	run.town_favors.assign(["f_mazzo_incantato", "favor_cash", "favor_cash"])
 	run.apply({"a": "skip_show"})
 	eq(run.phase, RunState.Phase.PACK, "the free pack opened")
 	eq(run.pack["id"], "pk_tarocchi_grand", "a Grand Tarocchi Pack")
@@ -348,7 +348,7 @@ func test_free_pack_favor_from_a_skip() -> void:
 func test_gemello_doubles_the_next_favor() -> void:
 	var run := _run()
 	run.gain_favor("f_gemello")
-	run.town_favors.assign(["f_invito", "favor_cash"])
+	run.town_favors.assign(["f_invito", "favor_cash", "favor_cash"])
 	run.apply({"a": "skip_show"})
 	eq(run.pack["id"], "pk_zanni_grand", "the first Jester pack")
 	eq(run.pack_queue, ["pk_zanni_grand"] as Array[String], "a second one queued")

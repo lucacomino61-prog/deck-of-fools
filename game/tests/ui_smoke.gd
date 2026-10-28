@@ -27,6 +27,7 @@ func _ready() -> void:
 	_check(menu is MenuScreen, "Enter opens the menu")
 	_check_fills(menu, "the menu")
 	_check(menu.find_children("*", "Button", true, false).any(func(b: Button) -> bool: return b.text == "Play"), "the menu's Play")
+	_check(menu.find_children("*", "Button", true, false).any(func(b: Button) -> bool: return b.text == "Grand Tour"), "the menu's Grand Tour tab")
 	Game.new_run("d_bergamo", 1)
 	Settings.tutorial_step = 0
 	Settings.speed = 1

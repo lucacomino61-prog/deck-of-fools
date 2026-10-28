@@ -112,7 +112,7 @@ func test_maschera_oro() -> void:
 
 func test_orologio_counts_patrons() -> void:
 	var run := _run(["z_orologio", "z_huge"])
-	for show in 3:
+	for show in Shows.PATRON + 1:
 		_win_show(run)
 		run.apply({"a": "cash_out"})
 		run.apply({"a": "leave_shop"})
@@ -159,10 +159,10 @@ func test_teatro_olimpico() -> void:
 func test_nebbia_mutes_patrons() -> void:
 	var run := _run(["z_nebbia"])
 	pin_town(run)
-	run.apply({"a": "skip_show"})
-	run.apply({"a": "skip_show"})
+	for i in Shows.PATRON:
+		run.apply({"a": "skip_show"})
 	run.apply({"a": "select_show"})
-	eq(run.show_target, 750, "patron target x2.5")
+	eq(run.show_target, 1000, "patron target x2.5")
 	var hearts := run.full_deck.filter(func(c: PlayingCard) -> bool: return c.suit == PlayingCard.Suit.HEARTS)
 	ok(hearts.all(func(c: PlayingCard) -> bool: return not c.debuffed), "the patron's whim didn't fire")
 

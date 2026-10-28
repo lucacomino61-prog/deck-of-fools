@@ -44,8 +44,10 @@ func _initialize() -> void:
 		var stake := 1 + bot.randi() % stakes
 		var seed_text := "FZ%d-%d" % [bot.seed, n]
 		var extras := _random_extras() if challenge == "" and bot.randf() < 0.6 else {}
-		print("RUN %d %s %s stake %d %s%s%s" % [n, seed_text, deck, stake, challenge, " rich" if rich else "", " " + JSON.stringify(extras) if not extras.is_empty() else ""])
-		var run := RunState.create(seed_text, deck, stake, challenge, [], extras)
+		# One run in five is a Grand Tour.
+		var towns := Shows.GRAND_TOWNS if challenge == "" and bot.randf() < 0.2 else Shows.FINAL_TOWN
+		print("RUN %d %s %s stake %d %s%s%s%s" % [n, seed_text, deck, stake, challenge, " rich" if rich else "", " grand" if towns != Shows.FINAL_TOWN else "", " " + JSON.stringify(extras) if not extras.is_empty() else ""])
+		var run := RunState.create(seed_text, deck, stake, challenge, [], extras, towns)
 		_check(run, "created")
 		_play(run, steps, rich)
 		var end := "won" if run.won else ("lost at %s" % (run.current_patron() if run.show_index == Shows.PATRON else "show %d" % run.show_index) if run.phase == RunState.Phase.LOST else "stopped")
@@ -54,7 +56,7 @@ func _initialize() -> void:
 		if run.won:
 			won += 1
 		if not rich:
-			var again := RunState.replay(seed_text, deck, stake, run.action_log, challenge, [], extras)
+			var again := RunState.replay(seed_text, deck, stake, run.action_log, challenge, [], extras, towns)
 			if JSON.stringify(again.to_dict()) != JSON.stringify(run.to_dict()):
 				_fail(run, "replay from the log doesn't rebuild the run")
 	var lines := []

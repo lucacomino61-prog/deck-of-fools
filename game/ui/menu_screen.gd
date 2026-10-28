@@ -107,14 +107,19 @@ func _build_card(stage: Control) -> Control:
 	return v
 
 
+## New run and Grand Tour both pick a deck and a stake; Challenges pick a challenge.
+func _on_decks() -> bool:
+	return mode != "challenge"
+
+
 func _shown_deck() -> String:
-	if mode == "deck":
+	if _on_decks():
 		return deck_ids[deck_index]
 	return str(ContentDB.get_def(challenge_ids[challenge_index]).data.get("deck", deck_ids[0]))
 
 
 func _locked() -> bool:
-	if mode == "deck":
+	if _on_decks():
 		return not Game.profile.deck_unlocked(deck_ids[deck_index])
 	return not Game.profile.challenge_unlocked(challenge_ids[challenge_index])
 
@@ -133,6 +138,7 @@ func _build_setup(stage: Control, w: float) -> Control:
 	var tabs := HBoxContainer.new()
 	tabs.add_theme_constant_override("separation", 4)
 	tabs.add_child(_tab("New run", "deck"))
+	tabs.add_child(_tab("Grand Tour", "grand"))
 	tabs.add_child(_tab("Challenges", "challenge"))
 	var count := UiTheme.label(_count_text(), 10, UiTheme.MUTED)
 	count.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -141,14 +147,14 @@ func _build_setup(stage: Control, w: float) -> Control:
 	col.add_child(tabs)
 
 	var locked := _locked()
-	var id: String = deck_ids[deck_index] if mode == "deck" else challenge_ids[challenge_index]
+	var id: String = deck_ids[deck_index] if _on_decks() else challenge_ids[challenge_index]
 	col.add_child(_picker(UiTheme.name_of(id), 24, _cycle, locked))
 	var about := UiTheme.text_of(id)
 	if locked:
-		about = _deck_lock_reason(id) if mode == "deck" else _challenge_lock_reason()
+		about = _deck_lock_reason(id) if _on_decks() else _challenge_lock_reason()
 	col.add_child(_words(about, 12, UiTheme.MULT.lightened(0.35) if locked else UiTheme.TEXT, cw, 30))
 
-	if mode == "deck" and not locked:
+	if _on_decks() and not locked:
 		var top := Game.profile.max_stake(id)
 		stake = clampi(stake, 1, top)
 		var stake_def: ContentDef = ContentDB.pool("stake")[stake - 1]
@@ -157,6 +163,8 @@ func _build_setup(stage: Control, w: float) -> Control:
 		if top < Unlocks.TOP_STAKE and stake == top:
 			stake_words += ". Win here to open Stake %d." % (top + 1)
 		col.add_child(_words(stake_words, 11, UiTheme.MUTED, cw, 15))
+		if mode == "grand":
+			col.add_child(_words("%d towns from Palermo to Venezia, two to three hours. A tour this long doesn't count for the leaderboards." % Shows.GRAND_TOWNS, 11, UiTheme.GOLD, cw, 15))
 	elif mode == "challenge":
 		var deck := str(ContentDB.get_def(id).data.get("deck", ""))
 		col.add_child(_words("Deck: %s. %s" % [UiTheme.name_of(deck), UiTheme.text_of(deck)], 11, UiTheme.MUTED, cw, 36))
@@ -178,7 +186,7 @@ func _build_setup(stage: Control, w: float) -> Control:
 
 
 func _count_text() -> String:
-	if mode == "deck":
+	if _on_decks():
 		return "%d of %d decks unlocked" % [deck_ids.filter(func(d: String) -> bool: return Game.profile.deck_unlocked(d)).size(), deck_ids.size()]
 	return "%d of %d challenges unlocked" % [challenge_ids.filter(func(c: String) -> bool: return Game.profile.challenge_unlocked(c)).size(), challenge_ids.size()]
 
@@ -190,7 +198,7 @@ func _tour_card() -> Control:
 		var chapter := ContentDB.get_def(saved.chapter)
 		var heading := "Tour in progress" if chapter == null else "Chapter %d in progress" % int(chapter.data["n"])
 		var what := UiTheme.name_of(saved.challenge) if saved.challenge != "" else "%s, Stake %d" % [UiTheme.name_of(saved.deck_id), saved.stake]
-		var info := "Town %d, %s.  %s" % [saved.town, RunScreen.SHOW_NAMES[saved.show_index], what]
+		var info := "Town %d%s, %s.  %s" % [saved.town, " of %d" % saved.towns if saved.towns != Shows.FINAL_TOWN else "", RunScreen.SHOW_NAMES[saved.show_index], what]
 		return _card(heading, info, "Continue", _on_continue, UiTheme.POINTS)
 	var cleared := Game.profile.chapters_cleared
 	if cleared >= CampaignCards.COUNT:
@@ -266,7 +274,7 @@ func _tab(text: String, tab_mode: String) -> Button:
 		mode = tab_mode
 		_confirm_new = false
 		_build(), 11, UiTheme.GOLD.darkened(0.35) if mode == tab_mode else UiTheme.PANEL_DARK)
-	b.custom_minimum_size = Vector2(96, 0)
+	b.custom_minimum_size = Vector2(88, 0)
 	return b
 
 
@@ -419,7 +427,7 @@ func _cycle(step: int) -> void:
 	Feel.play("select")
 	_confirm_new = false
 	_slide = step
-	if mode == "deck":
+	if _on_decks():
 		deck_index = posmod(deck_index + step, deck_ids.size())
 	else:
 		challenge_index = posmod(challenge_index + step, challenge_ids.size())
@@ -441,8 +449,8 @@ func _on_start() -> void:
 		return
 	_confirm_new = false
 	Feel.play("play")
-	if mode == "deck":
-		Game.new_run(deck_ids[deck_index], stake)
+	if _on_decks():
+		Game.new_run(deck_ids[deck_index], stake, "", "", {"grand": true} if mode == "grand" else {})
 	else:
 		Game.new_run("", 1, challenge_ids[challenge_index])
 	start.emit()
@@ -450,21 +458,21 @@ func _on_start() -> void:
 
 ## What the left panel has picked, for the Seeded run sheet ("" when the deck is locked).
 func _setup_text() -> String:
-	if mode != "deck":
+	if not _on_decks():
 		var challenge: String = challenge_ids[challenge_index]
 		return "Challenge: " + UiTheme.name_of(challenge) if Game.profile.challenge_unlocked(challenge) else ""
 	var deck: String = deck_ids[deck_index]
 	if not Game.profile.deck_unlocked(deck):
 		return ""
-	return "%s deck, Stake %d" % [UiTheme.name_of(deck), stake]
+	return "%s deck, Stake %d%s" % [UiTheme.name_of(deck), stake, ", Grand Tour" if mode == "grand" else ""]
 
 
 ## A run from a typed seed, with the deck and stake (or the challenge) picked on the left.
 ## It doesn't count for leaderboards or unlocks.
 func _start_seeded(seed_text: String) -> void:
 	Feel.play("play")
-	if mode == "deck":
-		Game.new_run(deck_ids[deck_index], stake, "", seed_text, {"seeded": true})
+	if _on_decks():
+		Game.new_run(deck_ids[deck_index], stake, "", seed_text, {"seeded": true, "grand": mode == "grand"})
 	else:
 		Game.new_run("", 1, challenge_ids[challenge_index], seed_text, {"seeded": true})
 	start.emit()

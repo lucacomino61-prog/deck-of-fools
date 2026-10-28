@@ -7,7 +7,7 @@ extends Control
 signal closed
 
 const TOUR_STEPS := [
-	["The Map of Italy", "After each Patron, choose the next city. Every city changes its three shows (its twist) and what its shop sells. The tour ends in Venezia for Carnevale."],
+	["The Map of Italy", "After each Patron, choose the next city. Every city changes its four shows (its twist) and what its shop sells. The tour ends in Venezia for Carnevale, after 8 towns, or 16 on a Grand Tour (a tab in the menu) that starts in Palermo."],
 	["Scenarios", "Before a show, Perform its Scenario: your next three hands must hit its beats in order (a Pair, then a Flush...). Hits pay ducats and big Mult; a miss is a Fiasco and that hand scores half. Or Improvise."],
 	["The crowd", "Good hands lift the crowd's mood, weak ones lower it. A full house of cheers gives your next hand x1.5 Mult; an empty one walks out and costs 3 ducats."],
 	["Encore!", "Win a show with a happy crowd and they shout Bis! One more hand worth half the target doubles your cash-out; miss it and you lose the show's reward. Or take a bow."],
@@ -26,7 +26,7 @@ const BETWEEN_STEPS := [
 var page := 0
 
 const STEPS := [
-	["Beat the shows", "Each town has three shows: the Matinee, the Evening show and the Patron. Score at least the target to win a show."],
+	["Beat the shows", "Each town has four shows: the Matinee, the Evening show, the Gala and the Patron. Score at least the target to win a show."],
 	["Make a poker hand", "Tap up to 5 cards, then press Play hand (or flick a card up). Pairs, straights, flushes and full houses score more. Hold any card to read it."],
 	["Points x Mult", "A hand scores its Points times its Mult. Every card that scores adds its own Points."],
 	["Hands and discards", "Each show gives you a few hands and discards. Discard swaps cards you don't want for new ones."],

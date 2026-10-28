@@ -45,8 +45,8 @@ func cards(spec: String) -> Array[PlayingCard]:
 ## debuffs Hearts), so a test about one card isn't changed by whichever real Favor or
 ## Patron the seed draws.
 func pin_town(run: RunState) -> void:
-	run.town_favors.assign(["favor_cash", "favor_cash"])
-	run.town_favor_notes.assign(["", ""])
+	run.town_favors.assign(["favor_cash", "favor_cash", "favor_cash"])
+	run.town_favor_notes.assign(["", "", ""])
 	run.town_patron = "patron_hearts"
 
 

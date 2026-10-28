@@ -123,7 +123,7 @@ func test_roma_and_mantova() -> void:
 
 	var mantova := _deck("d_mantova")
 	mantova.apply({"a": "select_show"})
-	eq(mantova.show_target, 600, "Mantova: targets x2")
+	eq(mantova.show_target, 800, "Mantova: targets x2")
 	eq(Scorer.score(mantova, cards("KH KS"), cards("")).total, 256, "30 and 2 even out to 16 x 16")
 
 

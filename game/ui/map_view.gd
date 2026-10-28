@@ -159,7 +159,8 @@ func _draw() -> void:
 					draw_line(a, b, UiTheme.GOLD, 2.0, true)
 				elif from_here:
 					draw_line(a, b, Color(UiTheme.GOLD, 0.55 + 0.35 * _pulse), 1.6, true)
-				elif row >= run.route_row:
+				elif row >= run.route_row and (run.towns <= RouteMap.ROWS or row < run.route_row + 3):
+					# A Grand Tour comes back through cities, so only the next few roads show.
 					draw_dashed_line(a, b, Color("6a4a2a", 0.7), 1.0, 3.0, true)
 	# Cities, then their names (where the troupe is and where it can go first).
 	var labels: Array = []

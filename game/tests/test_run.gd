@@ -32,7 +32,7 @@ func test_new_run() -> void:
 	eq(run.draw_pile.size(), 44, "44 left to draw")
 	eq(run.hands_left, 4, "4 hands")
 	eq(run.discards_left, 3, "3 discards")
-	eq(run.show_target, 300, "town 1 matinee target")
+	eq(run.show_target, 400, "town 1 matinee target")
 
 
 func test_play_and_discard() -> void:
@@ -166,6 +166,8 @@ func test_skip_gives_favor() -> void:
 	eq(run.ducats, 9, "favor paid 5")
 	eq(run.show_index, Shows.EVENING, "now the evening show")
 	run.apply({"a": "skip_show"})
+	eq(run.show_index, Shows.GALA, "then the Gala")
+	ok(run.apply({"a": "skip_show"})["ok"], "the Gala can be skipped for its Favor too")
 	ok(not run.apply({"a": "skip_show"})["ok"], "patron can't be skipped")
 
 
@@ -175,12 +177,17 @@ func test_targets_and_patron() -> void:
 	_win_show(run)
 	run.apply({"a": "leave_shop"})
 	run.apply({"a": "select_show"})
-	eq(run.show_target, 450, "evening x1.5")
+	eq(run.show_target, 600, "evening x1.5")
 	run.apply({"a": "play", "cards": _hand_ids(run, 5)})
 	run.apply({"a": "cash_out"})
 	run.apply({"a": "leave_shop"})
 	run.apply({"a": "select_show"})
-	eq(run.show_target, 600, "patron x2")
+	eq(run.show_target, 700, "the Gala x1.75")
+	run.apply({"a": "play", "cards": _hand_ids(run, 5)})
+	run.apply({"a": "cash_out"})
+	run.apply({"a": "leave_shop"})
+	run.apply({"a": "select_show"})
+	eq(run.show_target, 800, "patron x2")
 	var hearts := run.full_deck.filter(func(c: PlayingCard) -> bool: return c.suit == PlayingCard.Suit.HEARTS)
 	ok(hearts.all(func(c: PlayingCard) -> bool: return c.debuffed), "patron debuffed every heart")
 
@@ -233,7 +240,7 @@ func test_full_tour_and_endless() -> void:
 	var run := RunState.create("TOUR")
 	run.zanni.append(ItemCard.make("z_huge", 1))
 	for town in range(1, 9):
-		for show in 3:
+		for show in Shows.PATRON + 1:
 			_win_show(run)
 			if run.won:
 				break

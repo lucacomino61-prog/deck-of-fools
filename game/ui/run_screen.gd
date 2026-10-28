@@ -11,8 +11,8 @@ extends Control
 
 signal back_to_menu
 
-const SHOW_NAMES := ["Matinee", "Evening show", "Patron"]
-const SHOW_COLOURS := [Color("3f8ed8"), Color("2e9c8f"), Color("e0503c")]
+const SHOW_NAMES := ["Matinee", "Evening show", "Gala", "Patron"]
+const SHOW_COLOURS := [Color("3f8ed8"), Color("2e9c8f"), Color("9b5fd6"), Color("e0503c")]
 const SUITS := ["Spades", "Hearts", "Clubs", "Diamonds"]
 const RANK_NAMES := {11: "Jack", 12: "Queen", 13: "King", 14: "Ace"}
 const RANK_SHORT := {11: "J", 12: "Q", 13: "K", 14: "A"}
@@ -394,7 +394,7 @@ func refresh() -> void:
 ## on when the player does what they say), and what the spotlight lights: "main" (the first
 ## button), "play" (Play hand), "hand", "goal" or "middle".
 const COACH := [
-	[RunState.Phase.CHOOSE_SHOW, "Welcome to the tour! Every town has three shows. Score a show's target to win it. Tap here to begin.", false, "main"],
+	[RunState.Phase.CHOOSE_SHOW, "Welcome to the tour! Every town has four shows. Score a show's target to win it. Tap here to begin.", false, "main"],
 	[RunState.Phase.IN_SHOW, "These are your cards. Tap up to 5 to make a poker hand: a pair, two pair, a flush, a straight... Hold any card to read it.", false, "hand"],
 	[RunState.Phase.IN_SHOW, "The table names your hand and what it will score. Press Play hand (or flick a card up).", false, "play"],
 	[RunState.Phase.IN_SHOW, "Score = Points x Mult. Fill this bar to the target before your hands run out. Discard swaps cards for new ones (or flick one down).", true, "goal"],
@@ -601,9 +601,12 @@ func _update_info() -> void:
 func _phase_hint() -> String:
 	match run.phase:
 		RunState.Phase.CHOOSE_SHOW:
+			var skip := ""
+			if run.show_index < Shows.PATRON and run.town_favors[run.show_index] != "":
+				skip = " Skipping it gives %s: %s" % [UiTheme.name_of(run.town_favors[run.show_index]), _sentence(_favor_text(run.show_index))]
 			if run.tour:
-				return "Perform tonight's Scenario for big rewards, improvise, or skip the show for its Favor."
-			return "Play this show, or skip it to take its Favor."
+				return "Perform tonight's Scenario for big rewards, improvise, or skip the show for its Favor." + skip
+			return "Play this show, or skip it to take its Favor." + skip
 		RunState.Phase.IN_SHOW:
 			if run.scenario_on:
 				return "Scenario: your next hand must be %s." % ScenarioCards.beat_text((ContentDB.get_def(run.scenario).data["beats"] as Array)[run.scenario_beat])
@@ -1074,7 +1077,7 @@ func _middle_map() -> void:
 	var names := VBoxContainer.new()
 	head.add_child(names)
 	var town_no := run.town
-	names.add_child(UiTheme.label("Town %d of the tour" % town_no if town_no <= Shows.FINAL_TOWN else "Town %d (endless)" % town_no, 8, UiTheme.MUTED))
+	names.add_child(UiTheme.label("Town %d of %d" % [town_no, run.towns] if town_no <= run.towns else "Town %d (endless)" % town_no, 8, UiTheme.MUTED))
 	names.add_child(UiTheme.title(UiTheme.name_of(city_id), 16, UiTheme.GOLD))
 	names.add_child(UiTheme.label(TranslationServer.translate(city_id + ".gloss"), 9, UiTheme.MUTED))
 	var w := panel.size.x - 20.0
@@ -1101,8 +1104,9 @@ func _middle_map() -> void:
 
 func _middle_shows() -> void:
 	var r := run
-	var w := floorf((area_w - 18.0) / 3.0)
-	for i in 3:
+	var count := Shows.PATRON + 1
+	var w := floorf((area_w - 9.0 * (count - 1)) / count)
+	for i in count:
 		var panel := PanelContainer.new()
 		var active := i == r.show_index
 		var colour: Color = SHOW_COLOURS[i]
@@ -1120,7 +1124,10 @@ func _middle_shows() -> void:
 			var favor := r.town_favors[i]
 			if favor != "":
 				col.add_child(_wrapped("Skip for: " + UiTheme.name_of(favor), 10, w - 14.0))
-				col.add_child(_wrapped(_favor_text(i), 8, w - 14.0))
+				# Four shows side by side leave room for what a Favor does only on wide screens;
+				# it's in the side panel when the show is picked.
+				if w >= 140.0:
+					col.add_child(_wrapped(_favor_text(i), 8, w - 14.0))
 		else:
 			col.add_child(_wrapped(UiTheme.name_of(r.town_patron), 10, w - 14.0))
 			col.get_child(col.get_child_count() - 1).add_theme_color_override("font_color", UiTheme.MULT.lightened(0.2))
